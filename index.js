@@ -5,34 +5,12 @@ import * as $utils from "rollup-pluginutils";
 var b = $recast.types.builders;
 
 
-var reserved = {};
-
-// TODO is this correct/thorough ?
-"abstract arguments boolean break byte case catch char class const continue debugger default delete do double else enum eval export extends false final finally float for function goto if implements import in instanceof int interface let long native new null package private protected public return short static super switch synchronized this throw throws transient true try typeof var void volatile while with yield".split(" ").forEach(function (x) {
-  reserved[x] = true;
-});
-
-
-// TODO figure out a better way of doing this ?
-function encode(x) {
-  if (reserved[x] != null) {
-    // TODO is this correct ?
-    return "$" + x;
-
-  } else {
-    return x.replace(/(?:^[^a-zA-Z_])|[^a-zA-Z0-9_]/g, function (x) {
-      return "$" + x.charCodeAt(0) + "$";
-    });
-  }
-}
-
-
 function toIdentifier(x) {
   if (x.type === "Identifier") {
     return x;
 
   } else if (x.type === "Literal" && typeof x.value === "string") {
-    return b.identifier(encode(x.value));
+    return b.identifier(x.value);
 
   } else {
     return null;
