@@ -1,0 +1,17 @@
+{
+  "name": "rollup-plugin-purs",
+  "version": "1.0.0",
+  "description": "Use PureScript modules with Rollup",
+  "module": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "recast": "^0.11.18",
+    "rollup-pluginutils": "^1.5.2"
+  },
+  "devDependencies": {
+    "rollup": "^0.38.0"
+  },
+  "scripts": {
+    "test": "cd test && rollup --config"
+  }
+}
