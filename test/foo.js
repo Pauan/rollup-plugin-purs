@@ -5,19 +5,23 @@ var $bar = require("./bar");
 var bar2 = require("./bar")
   , _test1 = 20;
 
-module.exports = "foo5000";
+//module.exports = "foo5000";
 
 module.exports = {
   bar: $bar.bar,
   qux: $bar.qux,
-  foo_var: $bar["var"],
-  "foo_foo'": $bar["foo'"]
+  "var": $bar["var"],
+  "foo_foo'": $bar["foo'"],
+  foo_var10: foo_var1,
+  "const": foo_var1
 };
 
 exports.foo = "foo1";
 
 exports["uh"] = "foo2";
 
-exports["var"] = "foo3";
-
 exports["foo'"] = "foo10";
+
+var foo_var1 = 50;
+
+exports.foo_var = foo_var1;

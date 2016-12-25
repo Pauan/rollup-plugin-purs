@@ -1,4 +1,4 @@
-import purs from "../index.js";
+var purs = require("../index.js");
 
 export default {
   entry: "foo.js",
