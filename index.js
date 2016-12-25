@@ -1,5 +1,5 @@
-import * as $recast from "recast";
-import * as $utils from "rollup-pluginutils";
+var $recast = require("recast");
+var $utils = require("rollup-pluginutils");
 
 
 var b = $recast.types.builders;
@@ -18,7 +18,7 @@ function toIdentifier(x) {
 }
 
 
-export default function (options) {
+module.exports = function (options) {
   if (options == null) {
     options = {};
   }
