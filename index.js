@@ -1,5 +1,6 @@
 var $recast = require("recast");
 var $utils = require("rollup-pluginutils");
+var $path = require("path");
 
 
 var b = $recast.types.builders;
@@ -57,15 +58,59 @@ function exportVar(imports, identifier, expression) {
 }
 
 
+function pursPath(options, path) {
+  // TODO should this use resolve ?
+  return $path.resolve($path.join(options.outputDir, $path.basename(path, ".purs"), "index.js"));
+}
+
+
+var entryPath = "\0rollup-plugin-purs:entry-point";
+
+
 module.exports = function (options) {
   if (options == null) {
     options = {};
   }
 
+  if (options.outputDir == null) {
+    options.outputDir = "output";
+  }
+
   var filter = $utils.createFilter(options.include, options.exclude);
+
+  var entry = null;
 
   return {
     name: "purs",
+
+    // TODO hacky
+    options: function (rollup) {
+      if (rollup.entry != null &&
+          rollup.entry !== entryPath &&
+          $path.extname(rollup.entry) === ".purs") {
+        entry = rollup.entry;
+        rollup.entry = entryPath;
+      }
+    },
+
+    resolveId: function (id) {
+      // TODO hacky
+      if (id === entryPath) {
+        return id;
+
+      } else if ($path.extname(id) === ".purs") {
+        return pursPath(options, id);
+      }
+    },
+
+    // TODO hacky
+    // This creates a main entry point that calls the `main` function of the main PureScript module
+    load: function (id) {
+      if (id === entryPath) {
+        // TODO better stringification for the path ?
+        return "import { main } from " + JSON.stringify(entry) + "; main();";
+      }
+    },
 
     transform: function (code, id) {
       if (!filter(id)) return;

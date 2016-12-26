@@ -7,13 +7,18 @@ var bar2 = require("./bar")
 
 //module.exports = "foo5000";
 
+function main() {
+  console.log("HI!");
+}
+
 module.exports = {
   bar: $bar.bar,
   qux: $bar.qux,
-  "var": $bar["var"],
+  //"var": $bar["var"],
   "foo_foo'": $bar["foo'"],
   foo_var10: foo_var1,
-  "const": foo_var1
+  "const": foo_var1,
+  main: main
 };
 
 exports.foo = "foo1";

@@ -1,12 +1,12 @@
 var purs = require("../index.js");
 
 export default {
-  entry: "foo.js",
+  entry: "test/Main.purs",
   dest: "bundle.js",
   format: "es",
   plugins: [
     purs({
-
+      outputDir: "../output"
     })
   ]
 };
