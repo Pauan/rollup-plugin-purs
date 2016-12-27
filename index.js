@@ -26,21 +26,14 @@ function toIdentifier(x) {
 
 
 function mergeLoc(x, y) {
-  if (x.start.line === y.start.line &&
-      x.end.line === y.end.line) {
-    return {
-      start: x.start,
-      end: y.end,
-      // TODO is this correct ?
-      lines: x.lines,
-      // TODO is this correct ?
-      indent: x.indent
-    };
-
-  } else {
-    // TODO handle this situation better
-    throw new Error("Bad loc");
-  }
+  return {
+    start: x.start,
+    end: y.end,
+    // TODO is this correct ?
+    lines: x.lines,
+    // TODO is this correct ?
+    indent: x.indent
+  };
 }
 
 
@@ -109,17 +102,6 @@ function exportVar(imports, identifier, expression, loc) {
 function pursPath(options, path) {
   // TODO should this use resolve ?
   return $path.resolve($path.join(options.outputDir, path, "index.js"));
-}
-
-
-// TODO hacky
-function resolveFileImport(path) {
-  if (path.startsWith("../")) {
-    return $path.join(path, "index.js");
-
-  } else {
-    return path;
-  }
 }
 
 
@@ -205,9 +187,6 @@ module.exports = function (options) {
                   var file = x.init.arguments[0];
 
                   imports[x.id.name] = file;
-
-                  // TODO only do this when the file is inside of the outputDir ?
-                  file.value = resolveFileImport(file.value);
 
                   body.push({
                     type: "ImportDeclaration",
