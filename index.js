@@ -3,9 +3,6 @@ var $utils = require("rollup-pluginutils");
 var $path = require("path");
 
 
-var b = $recast.types.builders;
-
-
 function isValidIdentifier(x) {
   return /^[$_a-zA-Z][$_a-zA-Z0-9]*$/.test(x);
 }
@@ -16,8 +13,11 @@ function toIdentifier(x) {
     return x;
 
   } else if (x.type === "Literal" && typeof x.value === "string" && isValidIdentifier(x.value)) {
-    // TODO source maps
-    return b.identifier(x.value);
+    return {
+      type: "Identifier",
+      name: x.value,
+      loc: x.loc
+    };
 
   } else {
     return null;
@@ -25,13 +25,21 @@ function toIdentifier(x) {
 }
 
 
-function exportVar(imports, identifier, expression) {
+function exportVar(imports, identifier, expression, loc) {
   if (expression.type === "Identifier") {
     // export { expression as identifier };
-    // TODO source maps
-    return b.exportNamedDeclaration(null, [
-      b.exportSpecifier(expression, identifier)
-    ]);
+    return {
+      type: "ExportNamedDeclaration",
+      declaration: null,
+      // TODO source maps
+      specifiers: [{
+        type: "ExportSpecifier",
+        local: expression,
+        exported: identifier
+      }],
+      source: null,
+      loc: loc
+    };
 
   } else if (expression.type === "MemberExpression" &&
              expression.object.type === "Identifier") {
@@ -42,25 +50,46 @@ function exportVar(imports, identifier, expression) {
 
       if (from !== null) {
         // export { from as identifier } from file;
-        // TODO source maps
-        return b.exportNamedDeclaration(null, [
-          b.exportSpecifier(from, identifier)
-        ], file);
+        return {
+          type: "ExportNamedDeclaration",
+          declaration: null,
+          // TODO source maps
+          specifiers: [{
+            type: "ExportSpecifier",
+            local: from,
+            exported: identifier
+          }],
+          source: file,
+          loc: loc
+        };
       }
     }
   }
 
   // export var identifier = expression;
-  // TODO source maps
-  return b.exportNamedDeclaration(b.variableDeclaration("var", [
-    b.variableDeclarator(identifier, expression)
-  ]));
+  return {
+    type: "ExportNamedDeclaration",
+    // TODO source maps
+    declaration: {
+      type: "VariableDeclaration",
+      kind: "var",
+      // TODO source maps
+      declarations: [{
+        type: "VariableDeclarator",
+        id: identifier,
+        init: expression
+      }]
+    },
+    specifiers: [],
+    source: null,
+    loc: loc
+  };
 }
 
 
 function pursPath(options, path) {
   // TODO should this use resolve ?
-  return $path.resolve($path.join(options.outputDir, $path.basename(path, ".purs"), "index.js"));
+  return $path.resolve($path.join(options.outputDir, path, "index.js"));
 }
 
 
@@ -99,7 +128,7 @@ module.exports = function (options) {
         return id;
 
       } else if ($path.extname(id) === ".purs") {
-        return pursPath(options, id);
+        return pursPath(options, $path.basename(id, ".purs"));
       }
     },
 
@@ -144,10 +173,18 @@ module.exports = function (options) {
 
                   imports[x.id.name] = file;
 
-                  // TODO source maps
-                  body.push(b.importDeclaration([
-                    b.importNamespaceSpecifier(x.id)
-                  ], file));
+                  body.push({
+                    type: "ImportDeclaration",
+                    // TODO source maps
+                    specifiers: [{
+                      type: "ImportNamespaceSpecifier",
+                      local: x.id
+                    }],
+                    source: file,
+                    importKind: "value",
+                    // TODO if there is only one assignment, use the source map for the whole declaration
+                    loc: x.loc
+                  });
 
                 } else {
                   declarations.push(x);
@@ -176,7 +213,7 @@ module.exports = function (options) {
 
                 // exports.foo = bar;
                 if (identifier !== null) {
-                  body.push(exportVar(imports, identifier, x.expression.right));
+                  body.push(exportVar(imports, identifier, x.expression.right, x.loc));
 
                 } else {
                   body.push(x);
@@ -193,14 +230,17 @@ module.exports = function (options) {
                     // foo: bar
                     if (identifier !== null) {
                       // TODO handle get/set different ?
-                      body.push(exportVar(imports, identifier, x.value));
+                      body.push(exportVar(imports, identifier, x.value, x.loc));
                     }
                   });
                 }
 
                 // export default foo;
-                // TODO source maps
-                body.push(b.exportDefaultDeclaration(x.expression.right));
+                body.push({
+                  type: "ExportDefaultDeclaration",
+                  declaration: x.expression.right,
+                  loc: x.loc
+                });
 
               } else {
                 body.push(x);
@@ -226,8 +266,11 @@ module.exports = function (options) {
               isValidIdentifier(node.property.value)) {
             node.computed = false;
             // foo.bar = qux;
-            // TODO source maps
-            node.property = b.identifier(node.property.value);
+            node.property = {
+              type: "Identifier",
+              name: node.property.value,
+              loc: node.property.loc
+            };
           }
 
           this.traverse(path);
