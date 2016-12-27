@@ -1,4 +1,4 @@
-var foo = require("../../test/foo.js");
+var foo = require("../Foo");
 
 function main() {
   console.log("MAIN", foo.main());

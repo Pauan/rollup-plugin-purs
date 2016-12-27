@@ -1,8 +1,8 @@
 "use strict";
 
-var $bar = require("./bar");
+var $bar = require("../Bar");
 
-var bar2 = require("./bar")
+var bar2 = require("../Bar")
   , _test1 = 20;
 
 //module.exports = "foo5000";

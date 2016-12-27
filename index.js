@@ -112,6 +112,17 @@ function pursPath(options, path) {
 }
 
 
+// TODO hacky
+function resolveFileImport(path) {
+  if (path.startsWith("../")) {
+    return $path.join(path, "index.js");
+
+  } else {
+    return path;
+  }
+}
+
+
 var entryPath = "\0rollup-plugin-purs:entry-point";
 
 
@@ -194,6 +205,9 @@ module.exports = function (options) {
                   var file = x.init.arguments[0];
 
                   imports[x.id.name] = file;
+
+                  // TODO only do this when the file is inside of the outputDir ?
+                  file.value = resolveFileImport(file.value);
 
                   body.push({
                     type: "ImportDeclaration",
