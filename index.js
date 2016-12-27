@@ -1,6 +1,7 @@
 var $recast = require("recast");
 var $utils = require("rollup-pluginutils");
 var $path = require("path");
+var $fs = require("fs");
 
 
 function isValidIdentifier(x) {
@@ -140,7 +141,25 @@ module.exports = function (options) {
         return id;
 
       } else if ($path.extname(id) === ".purs") {
-        return pursPath(options, $path.basename(id, ".purs"));
+        // TODO hacky
+        return new Promise(function (resolve, reject) {
+          $fs.readFile(id, { encoding: "utf8" }, function (err, file) {
+            if (err) {
+              reject(err);
+
+            } else {
+              // TODO super hacky
+              var a = /(?:^|\n|\r\n) *module +([^ ]+)/.exec(file);
+
+              if (a) {
+                resolve(pursPath(options, a[1]));
+
+              } else {
+                reject(new Error("Could not detect module name for file " + id));
+              }
+            }
+          });
+        });
       }
     },
 

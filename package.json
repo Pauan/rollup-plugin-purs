@@ -9,7 +9,8 @@
     "rollup-pluginutils": "^1.5.2"
   },
   "devDependencies": {
-    "rollup": "^0.38.0"
+    "rollup": "^0.38.0",
+    "rollup-plugin-node-resolve": "^2.0.0"
   },
   "scripts": {
     "test": "cd test && rollup --config"

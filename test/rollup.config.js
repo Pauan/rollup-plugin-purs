@@ -1,7 +1,8 @@
 var purs = require("../index.js");
+var resolve = require("rollup-plugin-node-resolve");
 
 export default {
-  entry: "test/Main.purs",
+  entry: "Main.purs",
   dest: "bundle.js",
   format: "es",
   sourceMap: true,
@@ -9,6 +10,7 @@ export default {
   plugins: [
     purs({
       outputDir: "../output"
-    })
+    }),
+    resolve()
   ]
 };
