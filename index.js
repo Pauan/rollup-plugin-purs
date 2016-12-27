@@ -25,17 +25,36 @@ function toIdentifier(x) {
 }
 
 
+function mergeLoc(x, y) {
+  if (x.start.line === y.start.line &&
+      x.end.line === y.end.line) {
+    return {
+      start: x.start,
+      end: y.end,
+      // TODO is this correct ?
+      lines: x.lines,
+      // TODO is this correct ?
+      indent: x.indent
+    };
+
+  } else {
+    // TODO handle this situation better
+    throw new Error("Bad loc");
+  }
+}
+
+
 function exportVar(imports, identifier, expression, loc) {
   if (expression.type === "Identifier") {
     // export { expression as identifier };
     return {
       type: "ExportNamedDeclaration",
       declaration: null,
-      // TODO source maps
       specifiers: [{
         type: "ExportSpecifier",
         local: expression,
-        exported: identifier
+        exported: identifier,
+        loc: mergeLoc(expression.loc, identifier.loc)
       }],
       source: null,
       loc: loc
@@ -53,11 +72,11 @@ function exportVar(imports, identifier, expression, loc) {
         return {
           type: "ExportNamedDeclaration",
           declaration: null,
-          // TODO source maps
           specifiers: [{
             type: "ExportSpecifier",
             local: from,
-            exported: identifier
+            exported: identifier,
+            loc: mergeLoc(from.loc, identifier.loc)
           }],
           source: file,
           loc: loc
@@ -69,16 +88,16 @@ function exportVar(imports, identifier, expression, loc) {
   // export var identifier = expression;
   return {
     type: "ExportNamedDeclaration",
-    // TODO source maps
     declaration: {
       type: "VariableDeclaration",
       kind: "var",
-      // TODO source maps
       declarations: [{
         type: "VariableDeclarator",
         id: identifier,
-        init: expression
-      }]
+        init: expression,
+        loc: mergeLoc(identifier.loc, expression.loc)
+      }],
+      loc: loc
     },
     specifiers: [],
     source: null,
@@ -137,6 +156,7 @@ module.exports = function (options) {
     load: function (id) {
       if (id === entryPath) {
         // TODO better stringification for the path ?
+        // TODO source maps for this ?
         return "import { main } from " + JSON.stringify(entry) + "; main();";
       }
     },
@@ -144,7 +164,9 @@ module.exports = function (options) {
     transform: function (code, id) {
       if (!filter(id)) return;
 
-      var ast = $recast.parse(code);
+      var ast = $recast.parse(code, {
+        sourceFileName: id
+      });
 
       var imports = {};
 
@@ -175,10 +197,10 @@ module.exports = function (options) {
 
                   body.push({
                     type: "ImportDeclaration",
-                    // TODO source maps
                     specifiers: [{
                       type: "ImportNamespaceSpecifier",
-                      local: x.id
+                      local: x.id,
+                      loc: x.id.loc
                     }],
                     source: file,
                     importKind: "value",
@@ -277,7 +299,10 @@ module.exports = function (options) {
         }
       });
 
-      var out = $recast.print(ast);
+      var out = $recast.print(ast, {
+        // TODO is this correct ?
+        sourceMapName: id + ".map"
+      });
 
       //console.log(out.code);
 

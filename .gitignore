@@ -1,2 +1,3 @@
 /node_modules
 /test/bundle.js
+/test/bundle.js.map

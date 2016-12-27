@@ -8,7 +8,7 @@ var bar2 = require("./bar")
 //module.exports = "foo5000";
 
 function main() {
-  console.log("HI!");
+  console.log("HI!", $bar.main());
 }
 
 module.exports = {
