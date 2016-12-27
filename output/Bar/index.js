@@ -1,7 +1,7 @@
 var bar = "bar4";
 
 module.exports = {
-  bar: "bar1",
+  bar1: "bar1",
   qux: "bar2",
   "uh": "bar3",
   "var": bar,

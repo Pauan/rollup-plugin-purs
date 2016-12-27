@@ -45,7 +45,7 @@ function mergeLoc(x, y) {
 }
 
 
-function exportVar(imports, identifier, expression, loc) {
+function exportVar(path, imports, identifier, expression, loc) {
   if (expression.type === "Identifier") {
     // export { expression as identifier };
     return {
@@ -86,24 +86,29 @@ function exportVar(imports, identifier, expression, loc) {
     }
   }
 
-  // export var identifier = expression;
-  return {
-    type: "ExportNamedDeclaration",
-    declaration: {
-      type: "VariableDeclaration",
-      kind: "var",
-      declarations: [{
-        type: "VariableDeclarator",
-        id: identifier,
-        init: expression,
-        loc: mergeLoc(identifier.loc, expression.loc)
-      }],
+  if (isGlobal(path, identifier.name)) {
+    // export var identifier = expression;
+    return {
+      type: "ExportNamedDeclaration",
+      declaration: {
+        type: "VariableDeclaration",
+        kind: "var",
+        declarations: [{
+          type: "VariableDeclarator",
+          id: identifier,
+          init: expression,
+          loc: mergeLoc(identifier.loc, expression.loc)
+        }],
+        loc: loc
+      },
+      specifiers: [],
+      source: null,
       loc: loc
-    },
-    specifiers: [],
-    source: null,
-    loc: loc
-  };
+    };
+
+  } else {
+    throw new Error("Identifier already exists: " + identifier.name);
+  }
 }
 
 
@@ -265,7 +270,7 @@ module.exports = function (options) {
 
                 // exports.foo = bar;
                 if (identifier !== null) {
-                  body.push(exportVar(imports, identifier, x.expression.right, x.loc));
+                  body.push(exportVar(path, imports, identifier, x.expression.right, x.loc));
 
                 } else {
                   body.push(x);
@@ -282,7 +287,7 @@ module.exports = function (options) {
                     // foo: bar
                     if (identifier !== null) {
                       // TODO handle get/set different ?
-                      body.push(exportVar(imports, identifier, x.value, x.loc));
+                      body.push(exportVar(path, imports, identifier, x.value, x.loc));
 
                     } else {
                       throw new Error("Invalid module export: " + $recast.print(x).code);

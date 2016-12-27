@@ -23,17 +23,18 @@ function main() {
 
 module.exports = {
   //require: require,
-  bar: $bar.bar,
+  bar: $bar.bar1,
   qux: $bar.qux,
-  //"var": foo_var1,
-  "var": $bar["var"],
+  "if": foo_var1,
+  //"var": $bar["var"],
   "foo_foo'": $bar["foo'"],
   foo_var10: foo_var1,
   "const": foo_var1,
   main: main
 };
 
-exports.foo = "foo1";
+//exports.foo = "foo1";
+exports.foo1 = "foo1";
 
 exports["uh"] = "foo2";
 
