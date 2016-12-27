@@ -109,6 +109,18 @@ function pursPath(options, path) {
 var entryPath = "\0rollup-plugin-purs:entry-point";
 
 
+function isGlobal(path, name) {
+  return path.scope.lookup(name) === null;
+}
+
+
+function isGlobalIdentifier(path, node, name) {
+  return node.type === "Identifier" &&
+         node.name === name &&
+         isGlobal(path, node.name);
+}
+
+
 module.exports = function (options) {
   if (options == null) {
     options = {};
@@ -174,6 +186,7 @@ module.exports = function (options) {
     },
 
     transform: function (code, id) {
+      // TODO better filtering ?
       if (!filter(id)) return;
 
       var ast = $recast.parse(code, {
@@ -195,11 +208,10 @@ module.exports = function (options) {
               x.declarations.forEach(function (x) {
                 // TODO handle other patterns rather than only identifiers ?
                 // var foo = require("bar");
-                if (x.id.type === "Identifier" &&
-                    x.init !== null &&
+                if (x.init !== null &&
                     x.init.type === "CallExpression" &&
-                    x.init.callee.type === "Identifier" &&
-                    x.init.callee.name === "require" &&
+                    isGlobalIdentifier(path, x.init.callee, "require") &&
+                    x.id.type === "Identifier" &&
                     x.init.arguments.length === 1 &&
                     x.init.arguments[0].type === "Literal" &&
                     typeof x.init.arguments[0].value === "string") {
@@ -239,9 +251,8 @@ module.exports = function (options) {
             } else if (x.type === "ExpressionStatement" &&
                        x.expression.type === "AssignmentExpression" &&
                        x.expression.operator === "=" &&
-                       x.expression.left.type === "MemberExpression" &&
-                       x.expression.left.object.type === "Identifier") {
-              if (x.expression.left.object.name === "exports") {
+                       x.expression.left.type === "MemberExpression") {
+              if (isGlobalIdentifier(path, x.expression.left.object, "exports")) {
                 // TODO what about computed expressions ?
                 var identifier = toIdentifier(x.expression.left.property);
 
@@ -254,7 +265,7 @@ module.exports = function (options) {
                 }
 
               // module.exports = foo;
-              } else if (x.expression.left.object.name === "module") {
+              } else if (isGlobalIdentifier(path, x.expression.left.object, "module")) {
                 // module.exports = { ... };
                 if (x.expression.right.type === "ObjectExpression") {
                   x.expression.right.properties.forEach(function (x) {
@@ -265,6 +276,9 @@ module.exports = function (options) {
                     if (identifier !== null) {
                       // TODO handle get/set different ?
                       body.push(exportVar(imports, identifier, x.value, x.loc));
+
+                    } else {
+                      throw new Error("Invalid module export: " + $recast.print(x).code);
                     }
                   });
                 }
@@ -305,6 +319,23 @@ module.exports = function (options) {
               name: node.property.value,
               loc: node.property.loc
             };
+          }
+
+          if (isGlobalIdentifier(path, node.object, "exports")) {
+            throw new Error("Invalid exports: " + $recast.print(node).code);
+
+          } else if (isGlobalIdentifier(path, node.object, "module")) {
+            throw new Error("Invalid module: " + $recast.print(node).code);
+          }
+
+          this.traverse(path);
+        },
+
+        visitCallExpression: function (path) {
+          var node = path.node;
+
+          if (isGlobalIdentifier(path, node.callee, "require")) {
+            throw new Error("Invalid require: " + $recast.print(node).code);
           }
 
           this.traverse(path);
