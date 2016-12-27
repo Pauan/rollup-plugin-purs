@@ -18,15 +18,16 @@ function foo(require, exports, module) {
 }
 
 function main() {
-  console.log("HI!", $bar.main(), require);
+  console.log("HI!", $bar.main());
 }
 
 module.exports = {
-  require: require,
+  //require: require,
   bar: $bar.bar,
   qux: $bar.qux,
-  //"var": $bar["var"],
-  //"foo_foo'": $bar["foo'"],
+  //"var": foo_var1,
+  "var": $bar["var"],
+  "foo_foo'": $bar["foo'"],
   foo_var10: foo_var1,
   "const": foo_var1,
   main: main
@@ -36,7 +37,7 @@ exports.foo = "foo1";
 
 exports["uh"] = "foo2";
 
-//exports["foo'"] = "foo10";
+exports["foo'"] = "foo10";
 
 var foo_var1 = 50;
 

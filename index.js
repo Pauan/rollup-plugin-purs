@@ -5,7 +5,21 @@ var $fs = require("fs");
 
 
 function isValidIdentifier(x) {
-  return /^[$_a-zA-Z][$_a-zA-Z0-9]*$/.test(x);
+  return /^[$_a-zA-Z'][$_a-zA-Z0-9']*$/.test(x);
+}
+
+
+function stringToIdentifier(x) {
+  if (x.type === "Literal" && typeof x.value === "string" && isValidIdentifier(x.value)) {
+    return {
+      type: "Identifier",
+      name: x.value.replace(/'/g, "$prime"),
+      loc: x.loc
+    };
+
+  } else {
+    return null;
+  }
 }
 
 
@@ -13,15 +27,8 @@ function toIdentifier(x) {
   if (x.type === "Identifier") {
     return x;
 
-  } else if (x.type === "Literal" && typeof x.value === "string" && isValidIdentifier(x.value)) {
-    return {
-      type: "Identifier",
-      name: x.value,
-      loc: x.loc
-    };
-
   } else {
-    return null;
+    return stringToIdentifier(x);
   }
 }
 
@@ -307,35 +314,29 @@ module.exports = function (options) {
         visitMemberExpression: function (path) {
           var node = path.node;
 
+          var identifier = stringToIdentifier(node.property);
+
           // foo["bar"] = qux;
-          if (node.computed &&
-              node.property.type === "Literal" &&
-              typeof node.property.value === "string" &&
-              isValidIdentifier(node.property.value)) {
-            node.computed = false;
+          if (identifier !== null && node.computed) {
             // foo.bar = qux;
-            node.property = {
-              type: "Identifier",
-              name: node.property.value,
-              loc: node.property.loc
-            };
-          }
-
-          if (isGlobalIdentifier(path, node.object, "exports")) {
-            throw new Error("Invalid exports: " + $recast.print(node).code);
-
-          } else if (isGlobalIdentifier(path, node.object, "module")) {
-            throw new Error("Invalid module: " + $recast.print(node).code);
+            node.computed = false;
+            node.property = identifier;
           }
 
           this.traverse(path);
         },
 
-        visitCallExpression: function (path) {
+        visitIdentifier: function (path) {
           var node = path.node;
 
-          if (isGlobalIdentifier(path, node.callee, "require")) {
+          if (isGlobalIdentifier(path, node, "require")) {
             throw new Error("Invalid require: " + $recast.print(node).code);
+
+          } else if (isGlobalIdentifier(path, node, "exports")) {
+            throw new Error("Invalid exports: " + $recast.print(node).code);
+
+          } else if (isGlobalIdentifier(path, node, "module")) {
+            throw new Error("Invalid module: " + $recast.print(node).code);
           }
 
           this.traverse(path);
