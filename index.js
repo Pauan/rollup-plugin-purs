@@ -45,8 +45,11 @@ function mergeLoc(x, y) {
 }
 
 
-function exportVar(path, imports, identifier, expression, loc) {
+function exportVar(path, imports, exports, identifier, expression, loc) {
   if (expression.type === "Identifier") {
+    // TODO adjust the loc ?
+    setExport(exports, identifier.name, expression);
+
     // export { expression as identifier };
     return {
       type: "ExportNamedDeclaration",
@@ -69,6 +72,9 @@ function exportVar(path, imports, identifier, expression, loc) {
       var from = toIdentifier(expression.property);
 
       if (from !== null) {
+        // TODO adjust the loc ?
+        setExport(exports, identifier.name, expression);
+
         // export { from as identifier } from file;
         return {
           type: "ExportNamedDeclaration",
@@ -86,7 +92,10 @@ function exportVar(path, imports, identifier, expression, loc) {
     }
   }
 
-  if (isGlobal(path, identifier.name)) {
+  if (isUndefined(path, identifier.name)) {
+    // TODO adjust the loc ?
+    setExport(exports, identifier.name, identifier);
+
     // export var identifier = expression;
     return {
       type: "ExportNamedDeclaration",
@@ -107,7 +116,17 @@ function exportVar(path, imports, identifier, expression, loc) {
     };
 
   } else {
-    throw new Error("Identifier already exists: " + identifier.name);
+    throw new Error("Variable " + identifier.name + " already exists");
+  }
+}
+
+
+function setExport(exports, name, value) {
+  if (exports[name] != null) {
+    throw new Error("Variable " + name + " is already exported");
+
+  } else {
+    exports[name] = value;
   }
 }
 
@@ -121,15 +140,47 @@ function pursPath(options, path) {
 var entryPath = "\0rollup-plugin-purs:entry-point";
 
 
-function isGlobal(path, name) {
+function isUndefined(path, name) {
   return path.scope.lookup(name) === null;
 }
 
 
-function isGlobalIdentifier(path, node, name) {
+function isGlobal(path, name) {
+  var scope = path.scope.lookup(name);
+  return scope !== null && scope.isGlobal;
+}
+
+
+function isUndefinedIdentifier(path, node, name) {
   return node.type === "Identifier" &&
          node.name === name &&
-         isGlobal(path, node.name);
+         isUndefined(path, node.name);
+}
+
+
+function isProperty(x, name) {
+  return (!x.computed && x.property.type === "Identifier" && x.property.name === name) ||
+         (x.computed && x.property.type === "Literal" && x.property.value === name);
+}
+
+
+function replaceExport(path, exports, name) {
+  var scope = path.scope.lookup(name);
+
+  var exported = exports[name];
+
+  if (exported != null) {
+    if (scope === null || scope.isGlobal) {
+      // TODO adjust the source maps ?
+      path.replace(exported);
+
+    } else {
+      throw new Error("Variable " + name + " is defined in a sub-scope");
+    }
+
+  } else {
+    throw new Error("Variable " + name + " is not exported");
+  }
 }
 
 
@@ -206,6 +257,9 @@ module.exports = function (options) {
       });
 
       var imports = {};
+      var exports = {};
+
+      var moduleOverwritten = false;
 
       $recast.types.visit(ast, {
         visitProgram: function (path) {
@@ -222,7 +276,7 @@ module.exports = function (options) {
                 // var foo = require("bar");
                 if (x.init !== null &&
                     x.init.type === "CallExpression" &&
-                    isGlobalIdentifier(path, x.init.callee, "require") &&
+                    isUndefinedIdentifier(path, x.init.callee, "require") &&
                     x.id.type === "Identifier" &&
                     x.init.arguments.length === 1 &&
                     x.init.arguments[0].type === "Literal" &&
@@ -264,20 +318,32 @@ module.exports = function (options) {
                        x.expression.type === "AssignmentExpression" &&
                        x.expression.operator === "=" &&
                        x.expression.left.type === "MemberExpression") {
-              if (isGlobalIdentifier(path, x.expression.left.object, "exports")) {
+              // TODO handle module.exports.foo ?
+              if (isUndefinedIdentifier(path, x.expression.left.object, "exports")) {
                 // TODO what about computed expressions ?
                 var identifier = toIdentifier(x.expression.left.property);
 
                 // exports.foo = bar;
                 if (identifier !== null) {
-                  body.push(exportVar(path, imports, identifier, x.expression.right, x.loc));
+                  if (moduleOverwritten) {
+                    throw new Error("Export " + identifier.name + " is ignored");
+                  }
+
+                  body.push(exportVar(path, imports, exports, identifier, x.expression.right, x.loc));
 
                 } else {
                   body.push(x);
                 }
 
               // module.exports = foo;
-              } else if (isGlobalIdentifier(path, x.expression.left.object, "module")) {
+              } else if (isUndefinedIdentifier(path, x.expression.left.object, "module") &&
+                         isProperty(x.expression.left, "exports")) {
+                moduleOverwritten = true;
+
+                for (var key in exports) {
+                  throw new Error("Export " + key + " is ignored");
+                }
+
                 // module.exports = { ... };
                 if (x.expression.right.type === "ObjectExpression") {
                   x.expression.right.properties.forEach(function (x) {
@@ -287,7 +353,7 @@ module.exports = function (options) {
                     // foo: bar
                     if (identifier !== null) {
                       // TODO handle get/set different ?
-                      body.push(exportVar(path, imports, identifier, x.value, x.loc));
+                      body.push(exportVar(path, imports, exports, identifier, x.value, x.loc));
 
                     } else {
                       throw new Error("Invalid module export: " + $recast.print(x).code);
@@ -295,10 +361,31 @@ module.exports = function (options) {
                   });
                 }
 
-                // export default foo;
+                // TODO guarantee that collisions cannot occur ?
+                var temp = path.scope.declareTemporary("__private_do_not_use_default__");
+
+                // TODO is this correct ?
+                temp.loc = x.expression.left.loc;
+
+                setExport(exports, "default", temp);
+
+                // var temp = foo;
+                body.push({
+                  type: "VariableDeclaration",
+                  kind: "var",
+                  declarations: [{
+                    type: "VariableDeclarator",
+                    id: temp,
+                    init: x.expression.right,
+                    loc: x.loc
+                  }],
+                  loc: x.loc
+                });
+
+                // export default temp;
                 body.push({
                   type: "ExportDefaultDeclaration",
-                  declaration: x.expression.right,
+                  declaration: temp,
                   loc: x.loc
                 });
 
@@ -312,6 +399,8 @@ module.exports = function (options) {
           });
 
           node.body = body;
+
+          path.scope.scan(true);
 
           this.traverse(path);
         },
@@ -328,25 +417,39 @@ module.exports = function (options) {
             node.property = identifier;
           }
 
+          // TODO handle module.exports.foo ?
+          if (isUndefinedIdentifier(path, node.object, "exports") &&
+              // TODO is this correct ?
+              !node.computed &&
+              node.property.type === "Identifier" &&
+              !moduleOverwritten) {
+            replaceExport(path, exports, node.property.name);
+
+          } else if (isUndefinedIdentifier(path, node.object, "module") &&
+                     isProperty(node, "exports")) {
+            replaceExport(path, exports, "default");
+          }
+
           this.traverse(path);
         },
 
         visitIdentifier: function (path) {
           var node = path.node;
 
-          if (isGlobalIdentifier(path, node, "require")) {
+          if (isUndefinedIdentifier(path, node, "require")) {
             throw new Error("Invalid require: " + $recast.print(node).code);
 
-          } else if (isGlobalIdentifier(path, node, "exports")) {
+          } else if (isUndefinedIdentifier(path, node, "exports")) {
             throw new Error("Invalid exports: " + $recast.print(node).code);
 
-          } else if (isGlobalIdentifier(path, node, "module")) {
+          } else if (isUndefinedIdentifier(path, node, "module")) {
             throw new Error("Invalid module: " + $recast.print(node).code);
           }
 
           this.traverse(path);
         }
       });
+
 
       var out = $recast.print(ast, {
         // TODO is this correct ?
