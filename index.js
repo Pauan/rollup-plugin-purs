@@ -200,6 +200,10 @@ module.exports = function (options) {
     options.outputDir = "output";
   }
 
+  if (options.runMain == null) {
+    options.runMain = true;
+  }
+
   var filter = $utils.createFilter(options.include, options.exclude);
 
   var entry = null;
@@ -209,8 +213,10 @@ module.exports = function (options) {
 
     // TODO hacky
     options: function (rollup) {
-      if (rollup.entry != null &&
+      if (options.runMain &&
+          rollup.entry != null &&
           rollup.entry !== entryPath &&
+          // TODO a bit hacky
           $path.extname(rollup.entry) === ".purs") {
         entry = rollup.entry;
         rollup.entry = entryPath;
@@ -429,11 +435,14 @@ module.exports = function (options) {
               // TODO is this correct ?
               !node.computed &&
               node.property.type === "Identifier" &&
+              // TODO is this correct ?
               !moduleOverwritten) {
             replaceExport(path, exports, node.property.name);
 
           } else if (isUndefinedIdentifier(path, node.object, "module") &&
-                     isProperty(node, "exports")) {
+                     isProperty(node, "exports") &&
+                     // TODO is this correct ?
+                     moduleOverwritten) {
             replaceExport(path, exports, "default");
           }
 
@@ -444,13 +453,13 @@ module.exports = function (options) {
           var node = path.node;
 
           if (isUndefinedIdentifier(path, node, "require")) {
-            warn(filePath, "Invalid require: " + $recast.print(node).code);
+            warn(filePath, "Invalid " + $recast.print(node).code);
 
           } else if (isUndefinedIdentifier(path, node, "exports")) {
-            warn(filePath, "Invalid exports: " + $recast.print(node).code);
+            warn(filePath, "Invalid " + $recast.print(node).code);
 
           } else if (isUndefinedIdentifier(path, node, "module")) {
-            warn(filePath, "Invalid module: " + $recast.print(node).code);
+            warn(filePath, "Invalid " + $recast.print(node).code);
           }
 
           this.traverse(path);
