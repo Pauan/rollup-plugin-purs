@@ -116,8 +116,15 @@ function exportVar(path, imports, exports, identifier, expression, loc) {
     };
 
   } else {
+    // TODO maybe this should warn instead ?
     throw new Error("Variable " + identifier.name + " already exists");
   }
+}
+
+
+// TODO show the line/column number
+function warn(filePath, x) {
+  console.warn("Warning for file " + filePath + ": " + x);
 }
 
 
@@ -210,15 +217,15 @@ module.exports = function (options) {
       }
     },
 
-    resolveId: function (id) {
+    resolveId: function (filePath) {
       // TODO hacky
-      if (id === entryPath) {
-        return id;
+      if (filePath === entryPath) {
+        return filePath;
 
-      } else if ($path.extname(id) === ".purs") {
+      } else if ($path.extname(filePath) === ".purs") {
         // TODO hacky
         return new Promise(function (resolve, reject) {
-          $fs.readFile(id, { encoding: "utf8" }, function (err, file) {
+          $fs.readFile(filePath, { encoding: "utf8" }, function (err, file) {
             if (err) {
               reject(err);
 
@@ -230,7 +237,7 @@ module.exports = function (options) {
                 resolve(pursPath(options, a[1]));
 
               } else {
-                reject(new Error("Could not detect module name for file " + id));
+                reject(new Error("Could not detect module name for file " + filePath));
               }
             }
           });
@@ -240,20 +247,20 @@ module.exports = function (options) {
 
     // TODO hacky
     // This creates a main entry point that calls the `main` function of the main PureScript module
-    load: function (id) {
-      if (id === entryPath) {
+    load: function (filePath) {
+      if (filePath === entryPath) {
         // TODO better stringification for the path ?
         // TODO source maps for this ?
         return "import { main } from " + JSON.stringify(entry) + "; main();";
       }
     },
 
-    transform: function (code, id) {
+    transform: function (code, filePath) {
       // TODO better filtering ?
-      if (!filter(id)) return;
+      if (!filter(filePath)) return;
 
       var ast = $recast.parse(code, {
-        sourceFileName: id
+        sourceFileName: filePath
       });
 
       var imports = {};
@@ -326,7 +333,7 @@ module.exports = function (options) {
                 // exports.foo = bar;
                 if (identifier !== null) {
                   if (moduleOverwritten) {
-                    throw new Error("Export " + identifier.name + " is ignored");
+                    warn(filePath, "Export " + identifier.name + " is ignored");
                   }
 
                   body.push(exportVar(path, imports, exports, identifier, x.expression.right, x.loc));
@@ -341,7 +348,7 @@ module.exports = function (options) {
                 moduleOverwritten = true;
 
                 for (var key in exports) {
-                  throw new Error("Export " + key + " is ignored");
+                  warn(filePath, "Export " + key + " is ignored");
                 }
 
                 // module.exports = { ... };
@@ -356,7 +363,7 @@ module.exports = function (options) {
                       body.push(exportVar(path, imports, exports, identifier, x.value, x.loc));
 
                     } else {
-                      throw new Error("Invalid module export: " + $recast.print(x).code);
+                      warn(filePath, "Invalid module export: " + $recast.print(x).code);
                     }
                   });
                 }
@@ -437,13 +444,13 @@ module.exports = function (options) {
           var node = path.node;
 
           if (isUndefinedIdentifier(path, node, "require")) {
-            throw new Error("Invalid require: " + $recast.print(node).code);
+            warn(filePath, "Invalid require: " + $recast.print(node).code);
 
           } else if (isUndefinedIdentifier(path, node, "exports")) {
-            throw new Error("Invalid exports: " + $recast.print(node).code);
+            warn(filePath, "Invalid exports: " + $recast.print(node).code);
 
           } else if (isUndefinedIdentifier(path, node, "module")) {
-            throw new Error("Invalid module: " + $recast.print(node).code);
+            warn(filePath, "Invalid module: " + $recast.print(node).code);
           }
 
           this.traverse(path);
@@ -453,7 +460,7 @@ module.exports = function (options) {
 
       var out = $recast.print(ast, {
         // TODO is this correct ?
-        sourceMapName: id + ".map"
+        sourceMapName: filePath + ".map"
       });
 
       //console.log(out.code);
