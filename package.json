@@ -2,8 +2,9 @@
   "name": "rollup-plugin-purs",
   "version": "1.0.0",
   "description": "Use PureScript modules with Rollup",
-  "module": "index.js",
+  "repository": "Pauan/rollup-plugin-purs",
   "license": "MIT",
+  "main": "index.js",
   "dependencies": {
     "recast": "^0.11.18",
     "rollup-pluginutils": "^2.0.1"
