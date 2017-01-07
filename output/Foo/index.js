@@ -34,7 +34,8 @@ module.exports = {
   foo_var10: foo_var1,
   "const": foo_var1,
   main: main,
-  foo2: "testing"
+  foo2: "testing",
+  curried: $bar.curried
 };
 
 //exports.foo = "foo1";

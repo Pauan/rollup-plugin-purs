@@ -476,9 +476,185 @@ module.exports = function (options) {
       return out;
     },
 
-    transformBundle: function (source) {
-      //console.log("transformBundle");
-      //console.log(source);
+
+    // Decurrying optimization
+    transformBundle: function (code) {
+      var _this = this;
+
+      var ast = $recast.parse(code, {
+        // TODO is this correct ?
+        sourceFileName: "\0rollup-plugin-purs:bundle"
+      });
+
+      var curried = {};
+
+      function getCurried(top) {
+        // Only decurry 1-argument functions
+        if (top.params.length === 1) {
+          var params = [top.params];
+
+          var x = top;
+
+          while (x.body.body.length === 1 &&
+                 x.body.body[0].type === "ReturnStatement" &&
+                 x.body.body[0].argument !== null &&
+                 x.body.body[0].argument.type === "FunctionExpression" &&
+                 // Only decurry 1-argument functions
+                 x.body.body[0].argument.params.length === 1) {
+            x = x.body.body[0].argument;
+            params.push(x.params);
+          }
+
+          if (x === top) {
+            return null;
+
+          } else {
+            return {
+              params: params,
+              body: x.body,
+              loc: top.loc
+            };
+          }
+
+        } else {
+          return null;
+        }
+      }
+
+      function makeUncurried(path, id, uncurried) {
+        // TODO guarantee that collisions cannot occur ?
+        var temp = path.scope.declareTemporary("__private_do_not_use_uncurried__");
+
+        // TODO is this correct ?
+        temp.loc = id.loc;
+
+        curried[id.name] = {
+          params: uncurried.params,
+          identifier: temp
+        };
+
+        return {
+          type: "VariableDeclaration",
+          kind: "var",
+          declarations: [{
+            type: "VariableDeclarator",
+            id: temp,
+            init: {
+              type: "FunctionExpression",
+              id: null,
+              // TODO better flatten function
+              params: [].concat.apply([], uncurried.params),
+              body: uncurried.body,
+              loc: uncurried.loc
+            },
+            loc: uncurried.loc
+          }],
+          loc: uncurried.loc
+        };
+      }
+
+      function getCurriedCall(path, top) {
+        var args = [];
+
+        var x = top;
+
+        while (x.type === "CallExpression") {
+          args.push(x.arguments);
+          x = x.callee;
+        }
+
+        args.reverse();
+
+        if (x.type === "Identifier" &&
+            x.name in curried &&
+            isGlobal(path, x.name) &&
+            isArgumentsSaturated(curried[x.name].params, args)) {
+          return {
+            type: "CallExpression",
+            callee: curried[x.name].identifier,
+            // TODO better flatten function
+            arguments: [].concat.apply([], args),
+            // TODO is this loc correct ?
+            loc: top.loc
+          };
+
+        } else {
+          return null;
+        }
+      }
+
+      function isArgumentsSaturated(expected, actual) {
+        var length = expected.length;
+
+        if (length === actual.length) {
+          for (var i = 0; i < length; ++i) {
+            if (expected[i].length !== actual[i].length) {
+              return false;
+            }
+          }
+
+          return true;
+
+        } else {
+          return false;
+        }
+      }
+
+      $recast.types.visit(ast, {
+        visitProgram: function (path) {
+          var node = path.node;
+
+          var body = [];
+
+          node.body.forEach(function (x) {
+            if (x.type === "FunctionDeclaration") {
+              var uncurried = getCurried(x);
+
+              if (uncurried !== null) {
+                body.push(makeUncurried(path, x.id, uncurried));
+              }
+
+            } else if (x.type === "VariableDeclaration") {
+              x.declarations.forEach(function (x) {
+                if (x.init !== null && x.init.type === "FunctionExpression") {
+                  var uncurried = getCurried(x.init);
+
+                  if (uncurried !== null) {
+                    body.push(makeUncurried(path, x.id, uncurried));
+                  }
+                }
+              });
+            }
+
+            body.push(x);
+          });
+
+          node.body = body;
+
+          this.traverse(path);
+        },
+
+        visitCallExpression: function (path) {
+          var node = path.node;
+
+          var uncurried = getCurriedCall(path, node);
+
+          if (uncurried !== null) {
+            path.replace(uncurried);
+          }
+
+          this.traverse(path);
+        }
+      });
+
+      var out = $recast.print(ast, {
+        // TODO is this correct ?
+        sourceMapName: "\0rollup-plugin-purs:bundle.map"
+      });
+
+      //console.log(out.code);
+
+      return out;
     }
   };
 };

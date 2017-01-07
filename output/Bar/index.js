@@ -8,6 +8,42 @@ exports["foo'"] = "bar5";
 exports.main = main;
 //exports.main = main;
 
+function curriedFn1(a) {
+  return function () {
+    return a;
+  };
+}
+
+function curriedFn(a) {
+  return function (b) {
+    return function (c, d) {
+      return function () {
+        return a + b + c + d;
+      };
+    };
+  };
+}
+
+function curriedFn2(a, b) {
+  return function (c) {
+    return function (d) {
+      return function () {
+        return a + b + c + d;
+      };
+    };
+  };
+}
+
+exports.curried = function (a) {
+  return function (b) {
+    return function (c) {
+      return a + b + c;
+    };
+  };
+};
+
 function main() {
-  console.log("nou");
+  console.log(curriedFn1(1), curriedFn1(1)());
+  console.log(curriedFn2(1, 2)(3)(4)());
+  console.log("nou", curriedFn(1), curriedFn(1)(2), curriedFn(1)(2)(3), curriedFn(1)(2)(3, 4), curriedFn(1)(2)(3, 4)());
 }
