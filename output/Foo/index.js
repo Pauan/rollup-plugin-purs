@@ -18,6 +18,7 @@ function foo(require, exports, module) {
 }
 
 function main() {
+  console.log(undefinedVariable());
   console.log("HI!", $bar.main(), exports.foo1, exports.foo2, exports["if"], exports.bar, exports.default, module.exports, module["exports"]);
 }
 

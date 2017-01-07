@@ -185,6 +185,130 @@ function replaceExport(path, exports, name) {
 }
 
 
+function getCurried(top) {
+  // Only decurry 1-argument functions
+  if (top.params.length === 1) {
+    var params = [top.params];
+
+    var x = top;
+
+    while (x.body.body.length === 1 &&
+           x.body.body[0].type === "ReturnStatement" &&
+           x.body.body[0].argument !== null &&
+           x.body.body[0].argument.type === "FunctionExpression" &&
+           // Only decurry 1-argument functions
+           x.body.body[0].argument.params.length === 1) {
+      x = x.body.body[0].argument;
+      params.push(x.params);
+    }
+
+    if (x === top) {
+      return null;
+
+    } else {
+      return {
+        params: params,
+        body: x.body,
+        loc: top.loc
+      };
+    }
+
+  } else {
+    return null;
+  }
+}
+
+function makeUncurried(path, id, uncurried) {
+  var flattened = [].concat.apply([], uncurried.params);
+
+  // TODO guarantee that collisions cannot occur ?
+  var temp = path.scope.declareTemporary(id.name + "__private_do_not_use_uncurried__" + flattened.length + "__");
+
+  // TODO is this correct ?
+  temp.loc = id.loc;
+
+  // TODO hacky
+  // TODO use path.scope.lookup ?
+  if (path.scope.curried == null) {
+    path.scope.curried = {};
+  }
+
+  path.scope.curried[id.name] = {
+    params: uncurried.params,
+    identifier: temp
+  };
+
+  return {
+    type: "VariableDeclaration",
+    kind: "var",
+    declarations: [{
+      type: "VariableDeclarator",
+      id: temp,
+      init: {
+        type: "FunctionExpression",
+        id: null,
+        // TODO better flatten function
+        params: flattened,
+        body: uncurried.body,
+        loc: uncurried.loc
+      },
+      loc: uncurried.loc
+    }],
+    loc: uncurried.loc
+  };
+}
+
+function getCurriedCall(path, top) {
+  var args = [];
+
+  var x = top;
+
+  while (x.type === "CallExpression") {
+    args.push(x.arguments);
+    x = x.callee;
+  }
+
+  args.reverse();
+
+  if (x.type === "Identifier") {
+    var scope = path.scope.lookup(x.name);
+
+    if (scope != null &&
+        scope.curried != null &&
+        x.name in scope.curried &&
+        isArgumentsSaturated(scope.curried[x.name].params, args)) {
+      return {
+        type: "CallExpression",
+        callee: scope.curried[x.name].identifier,
+        // TODO better flatten function
+        arguments: [].concat.apply([], args),
+        // TODO is this loc correct ?
+        loc: top.loc
+      };
+    }
+  }
+
+  return null;
+}
+
+function isArgumentsSaturated(expected, actual) {
+  var length = expected.length;
+
+  if (length === actual.length) {
+    for (var i = 0; i < length; ++i) {
+      if (expected[i].length !== actual[i].length) {
+        return false;
+      }
+    }
+
+    return true;
+
+  } else {
+    return false;
+  }
+}
+
+
 module.exports = function (options) {
   if (options == null) {
     options = {};
@@ -486,153 +610,42 @@ module.exports = function (options) {
         sourceFileName: "\0rollup-plugin-purs:bundle"
       });
 
-      var curried = {};
+      function visitBlockStatement(path) {
+        var node = path.node;
 
-      function getCurried(top) {
-        // Only decurry 1-argument functions
-        if (top.params.length === 1) {
-          var params = [top.params];
+        var body = [];
 
-          var x = top;
+        node.body.forEach(function (x) {
+          if (x.type === "FunctionDeclaration") {
+            var uncurried = getCurried(x);
 
-          while (x.body.body.length === 1 &&
-                 x.body.body[0].type === "ReturnStatement" &&
-                 x.body.body[0].argument !== null &&
-                 x.body.body[0].argument.type === "FunctionExpression" &&
-                 // Only decurry 1-argument functions
-                 x.body.body[0].argument.params.length === 1) {
-            x = x.body.body[0].argument;
-            params.push(x.params);
-          }
-
-          if (x === top) {
-            return null;
-
-          } else {
-            return {
-              params: params,
-              body: x.body,
-              loc: top.loc
-            };
-          }
-
-        } else {
-          return null;
-        }
-      }
-
-      function makeUncurried(path, id, uncurried) {
-        // TODO guarantee that collisions cannot occur ?
-        var temp = path.scope.declareTemporary("__private_do_not_use_uncurried__");
-
-        // TODO is this correct ?
-        temp.loc = id.loc;
-
-        curried[id.name] = {
-          params: uncurried.params,
-          identifier: temp
-        };
-
-        return {
-          type: "VariableDeclaration",
-          kind: "var",
-          declarations: [{
-            type: "VariableDeclarator",
-            id: temp,
-            init: {
-              type: "FunctionExpression",
-              id: null,
-              // TODO better flatten function
-              params: [].concat.apply([], uncurried.params),
-              body: uncurried.body,
-              loc: uncurried.loc
-            },
-            loc: uncurried.loc
-          }],
-          loc: uncurried.loc
-        };
-      }
-
-      function getCurriedCall(path, top) {
-        var args = [];
-
-        var x = top;
-
-        while (x.type === "CallExpression") {
-          args.push(x.arguments);
-          x = x.callee;
-        }
-
-        args.reverse();
-
-        if (x.type === "Identifier" &&
-            x.name in curried &&
-            isGlobal(path, x.name) &&
-            isArgumentsSaturated(curried[x.name].params, args)) {
-          return {
-            type: "CallExpression",
-            callee: curried[x.name].identifier,
-            // TODO better flatten function
-            arguments: [].concat.apply([], args),
-            // TODO is this loc correct ?
-            loc: top.loc
-          };
-
-        } else {
-          return null;
-        }
-      }
-
-      function isArgumentsSaturated(expected, actual) {
-        var length = expected.length;
-
-        if (length === actual.length) {
-          for (var i = 0; i < length; ++i) {
-            if (expected[i].length !== actual[i].length) {
-              return false;
+            if (uncurried !== null) {
+              body.push(makeUncurried(path, x.id, uncurried));
             }
+
+          } else if (x.type === "VariableDeclaration") {
+            x.declarations.forEach(function (x) {
+              if (x.init !== null && x.init.type === "FunctionExpression") {
+                var uncurried = getCurried(x.init);
+
+                if (uncurried !== null) {
+                  body.push(makeUncurried(path, x.id, uncurried));
+                }
+              }
+            });
           }
 
-          return true;
+          body.push(x);
+        });
 
-        } else {
-          return false;
-        }
+        node.body = body;
+
+        this.traverse(path);
       }
 
       $recast.types.visit(ast, {
-        visitProgram: function (path) {
-          var node = path.node;
-
-          var body = [];
-
-          node.body.forEach(function (x) {
-            if (x.type === "FunctionDeclaration") {
-              var uncurried = getCurried(x);
-
-              if (uncurried !== null) {
-                body.push(makeUncurried(path, x.id, uncurried));
-              }
-
-            } else if (x.type === "VariableDeclaration") {
-              x.declarations.forEach(function (x) {
-                if (x.init !== null && x.init.type === "FunctionExpression") {
-                  var uncurried = getCurried(x.init);
-
-                  if (uncurried !== null) {
-                    body.push(makeUncurried(path, x.id, uncurried));
-                  }
-                }
-              });
-            }
-
-            body.push(x);
-          });
-
-          node.body = body;
-
-          this.traverse(path);
-        },
+        visitProgram: visitBlockStatement,
+        visitBlockStatement: visitBlockStatement,
 
         visitCallExpression: function (path) {
           var node = path.node;

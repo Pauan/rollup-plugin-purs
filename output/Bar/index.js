@@ -43,6 +43,29 @@ exports.curried = function (a) {
 };
 
 function main() {
+  function innerCurried(a) {
+    return function (b) {
+      return function (c) {
+        return a + b + c;
+      };
+    };
+  }
+
+  (function () {
+    function innerCurried(a) {
+      return function (b) {
+        return a + b;
+      };
+    }
+
+    console.log(innerCurried(1)(2));
+  })();
+
+  (function () {
+    //var innerCurried = 10;
+    console.log(innerCurried(1)(2)(3));
+  })();
+
   console.log(curriedFn1(1), curriedFn1(1)());
   console.log(curriedFn2(1, 2)(3)(4)());
   console.log("nou", curriedFn(1), curriedFn(1)(2), curriedFn(1)(2)(3), curriedFn(1)(2)(3, 4), curriedFn(1)(2)(3, 4)());
