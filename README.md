@@ -21,6 +21,7 @@ import resolve from "rollup-plugin-node-resolve";
 export default {
   entry: "src/Main.purs",
   dest: "bundle.js",
+  format: "iife",
   sourceMap: true,
   plugins: [
     purs(),
