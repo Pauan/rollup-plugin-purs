@@ -218,7 +218,7 @@ function getCurried(top) {
   }
 }
 
-function makeUncurried(path, id, uncurried) {
+function makeUncurried(path, id, uncurried, body) {
   var flattened = [].concat.apply([], uncurried.params);
 
   // TODO guarantee that collisions cannot occur ?
@@ -234,27 +234,28 @@ function makeUncurried(path, id, uncurried) {
   }
 
   path.scope.curried[id.name] = {
+    used: false,
     params: uncurried.params,
-    identifier: temp
-  };
-
-  return {
-    type: "VariableDeclaration",
-    kind: "var",
-    declarations: [{
-      type: "VariableDeclarator",
-      id: temp,
-      init: {
-        type: "FunctionExpression",
-        id: null,
-        // TODO better flatten function
-        params: flattened,
-        body: uncurried.body,
+    identifier: temp,
+    body: body,
+    declaration: {
+      type: "VariableDeclaration",
+      kind: "var",
+      declarations: [{
+        type: "VariableDeclarator",
+        id: temp,
+        init: {
+          type: "FunctionExpression",
+          id: null,
+          // TODO better flatten function
+          params: flattened,
+          body: uncurried.body,
+          loc: uncurried.loc
+        },
         loc: uncurried.loc
-      },
+      }],
       loc: uncurried.loc
-    }],
-    loc: uncurried.loc
+    }
   };
 }
 
@@ -275,16 +276,25 @@ function getCurriedCall(path, top) {
 
     if (scope != null &&
         scope.curried != null &&
-        x.name in scope.curried &&
-        isArgumentsSaturated(scope.curried[x.name].params, args)) {
-      return {
-        type: "CallExpression",
-        callee: scope.curried[x.name].identifier,
-        // TODO better flatten function
-        arguments: [].concat.apply([], args),
-        // TODO is this loc correct ?
-        loc: top.loc
-      };
+        x.name in scope.curried) {
+      var curried = scope.curried[x.name];
+
+      if (isArgumentsSaturated(curried.params, args)) {
+        if (!curried.used) {
+          curried.used = true;
+          // TODO is this correct ?
+          curried.body.unshift(curried.declaration);
+        }
+
+        return {
+          type: "CallExpression",
+          callee: curried.identifier,
+          // TODO better flatten function
+          arguments: [].concat.apply([], args),
+          // TODO is this loc correct ?
+          loc: top.loc
+        };
+      }
     }
   }
 
@@ -320,6 +330,10 @@ module.exports = function (options) {
 
   if (options.runMain == null) {
     options.runMain = true;
+  }
+
+  if (options.uncurry == null) {
+    options.uncurry = true;
   }
 
   var filter = $utils.createFilter(options.include, options.exclude);
@@ -603,71 +617,73 @@ module.exports = function (options) {
 
     // Decurrying optimization
     transformBundle: function (code) {
-      var _this = this;
+      if (options.uncurry) {
+        var _this = this;
 
-      var ast = $recast.parse(code, {
-        // TODO is this correct ?
-        sourceFileName: "\0rollup-plugin-purs:bundle"
-      });
-
-      function visitBlockStatement(path) {
-        var node = path.node;
-
-        var body = [];
-
-        node.body.forEach(function (x) {
-          if (x.type === "FunctionDeclaration") {
-            var uncurried = getCurried(x);
-
-            if (uncurried !== null) {
-              body.push(makeUncurried(path, x.id, uncurried));
-            }
-
-          } else if (x.type === "VariableDeclaration") {
-            x.declarations.forEach(function (x) {
-              if (x.init !== null && x.init.type === "FunctionExpression") {
-                var uncurried = getCurried(x.init);
-
-                if (uncurried !== null) {
-                  body.push(makeUncurried(path, x.id, uncurried));
-                }
-              }
-            });
-          }
-
-          body.push(x);
+        var ast = $recast.parse(code, {
+          // TODO is this correct ?
+          sourceFileName: "\0rollup-plugin-purs:bundle"
         });
 
-        node.body = body;
-
-        this.traverse(path);
-      }
-
-      $recast.types.visit(ast, {
-        visitProgram: visitBlockStatement,
-        visitBlockStatement: visitBlockStatement,
-
-        visitCallExpression: function (path) {
+        function visitBlockStatement(path) {
           var node = path.node;
 
-          var uncurried = getCurriedCall(path, node);
+          var body = [];
 
-          if (uncurried !== null) {
-            path.replace(uncurried);
-          }
+          node.body.forEach(function (x) {
+            if (x.type === "FunctionDeclaration") {
+              var uncurried = getCurried(x);
+
+              if (uncurried !== null) {
+                makeUncurried(path, x.id, uncurried, body);
+              }
+
+            } else if (x.type === "VariableDeclaration") {
+              x.declarations.forEach(function (x) {
+                if (x.init !== null && x.init.type === "FunctionExpression") {
+                  var uncurried = getCurried(x.init);
+
+                  if (uncurried !== null) {
+                    makeUncurried(path, x.id, uncurried, body);
+                  }
+                }
+              });
+            }
+
+            body.push(x);
+          });
+
+          node.body = body;
 
           this.traverse(path);
         }
-      });
 
-      var out = $recast.print(ast, {
-        // TODO is this correct ?
-        sourceMapName: "\0rollup-plugin-purs:bundle.map"
-      });
+        $recast.types.visit(ast, {
+          visitProgram: visitBlockStatement,
+          visitBlockStatement: visitBlockStatement,
 
-      //console.log(out.code);
+          visitCallExpression: function (path) {
+            var node = path.node;
 
-      return out;
+            var uncurried = getCurriedCall(path, node);
+
+            if (uncurried !== null) {
+              path.replace(uncurried);
+            }
+
+            this.traverse(path);
+          }
+        });
+
+        var out = $recast.print(ast, {
+          // TODO is this correct ?
+          sourceMapName: "\0rollup-plugin-purs:bundle.map"
+        });
+
+        //console.log(out.code);
+
+        return out;
+      }
     }
   };
 };
