@@ -32,7 +32,7 @@ export default {
 
 In addition to `rollup-plugin-purs`, you will also need to use the [`rollup-plugin-node-resolve`](https://github.com/rollup/rollup-plugin-node-resolve) plugin.
 
-This plugin does **not** compile PureScript code, so you will first need to run `pulp build` (or equivalent) before using this plugin to bundle.
+This plugin does **not** compile PureScript code, so you will first need to run `pulp build` (or equivalent) before using this plugin.
 
 
 ## License
