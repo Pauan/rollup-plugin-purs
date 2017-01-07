@@ -6,10 +6,10 @@
   "license": "MIT",
   "dependencies": {
     "recast": "^0.11.18",
-    "rollup-pluginutils": "^1.5.2"
+    "rollup-pluginutils": "^2.0.1"
   },
   "devDependencies": {
-    "rollup": "^0.38.0",
+    "rollup": "^0.41.1",
     "rollup-plugin-node-resolve": "^2.0.0"
   },
   "scripts": {

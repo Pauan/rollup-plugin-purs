@@ -48,7 +48,7 @@ function mergeLoc(x, y) {
 function exportVar(path, imports, exports, identifier, expression, loc) {
   if (expression.type === "Identifier") {
     // TODO adjust the loc ?
-    setExport(exports, identifier.name, expression);
+    setExport.call(this, exports, identifier.name, expression);
 
     // export { expression as identifier };
     return {
@@ -73,7 +73,7 @@ function exportVar(path, imports, exports, identifier, expression, loc) {
 
       if (from !== null) {
         // TODO adjust the loc ?
-        setExport(exports, identifier.name, expression);
+        setExport.call(this, exports, identifier.name, expression);
 
         // export { from as identifier } from file;
         return {
@@ -94,7 +94,7 @@ function exportVar(path, imports, exports, identifier, expression, loc) {
 
   if (isUndefined(path, identifier.name)) {
     // TODO adjust the loc ?
-    setExport(exports, identifier.name, identifier);
+    setExport.call(this, exports, identifier.name, identifier);
 
     // export var identifier = expression;
     return {
@@ -117,20 +117,14 @@ function exportVar(path, imports, exports, identifier, expression, loc) {
 
   } else {
     // TODO maybe this should warn instead ?
-    throw new Error("Variable " + identifier.name + " already exists");
+    this.error("Variable " + identifier.name + " already exists");
   }
-}
-
-
-// TODO show the line/column number
-function warn(filePath, x) {
-  console.warn("Warning for file " + filePath + ": " + x);
 }
 
 
 function setExport(exports, name, value) {
   if (exports[name] != null) {
-    throw new Error("Variable " + name + " is already exported");
+    this.error("Variable " + name + " is already exported");
 
   } else {
     exports[name] = value;
@@ -182,11 +176,11 @@ function replaceExport(path, exports, name) {
       path.replace(exported);
 
     } else {
-      throw new Error("Variable " + name + " is defined in a sub-scope");
+      this.error("Variable " + name + " is defined in a sub-scope");
     }
 
   } else {
-    throw new Error("Variable " + name + " is not exported");
+    this.error("Variable " + name + " is not exported");
   }
 }
 
@@ -268,6 +262,8 @@ module.exports = function (options) {
       // TODO test if this optimization actually makes it faster or not
       if (!/exports|module|require/.test(code)) return;
 
+      var _this = this;
+
       var ast = $recast.parse(code, {
         sourceFileName: filePath
       });
@@ -342,10 +338,10 @@ module.exports = function (options) {
                 // exports.foo = bar;
                 if (identifier !== null) {
                   if (moduleOverwritten) {
-                    warn(filePath, "Export " + identifier.name + " is ignored");
+                    _this.warn("Export " + identifier.name + " is ignored");
                   }
 
-                  body.push(exportVar(path, imports, exports, identifier, x.expression.right, x.loc));
+                  body.push(exportVar.call(_this, path, imports, exports, identifier, x.expression.right, x.loc));
 
                 } else {
                   body.push(x);
@@ -357,7 +353,7 @@ module.exports = function (options) {
                 moduleOverwritten = true;
 
                 for (var key in exports) {
-                  warn(filePath, "Export " + key + " is ignored");
+                  _this.warn("Export " + key + " is ignored");
                 }
 
                 // module.exports = { ... };
@@ -369,10 +365,10 @@ module.exports = function (options) {
                     // foo: bar
                     if (identifier !== null) {
                       // TODO handle get/set different ?
-                      body.push(exportVar(path, imports, exports, identifier, x.value, x.loc));
+                      body.push(exportVar.call(_this, path, imports, exports, identifier, x.value, x.loc));
 
                     } else {
-                      warn(filePath, "Invalid module export: " + $recast.print(x).code);
+                      _this.warn("Invalid module export: " + $recast.print(x).code);
                     }
                   });
                 }
@@ -383,7 +379,7 @@ module.exports = function (options) {
                 // TODO is this correct ?
                 temp.loc = x.expression.left.loc;
 
-                setExport(exports, "default", temp);
+                setExport.call(_this, exports, "default", temp);
 
                 // var temp = foo;
                 body.push({
@@ -440,13 +436,13 @@ module.exports = function (options) {
               node.property.type === "Identifier" &&
               // TODO is this correct ?
               !moduleOverwritten) {
-            replaceExport(path, exports, node.property.name);
+            replaceExport.call(_this, path, exports, node.property.name);
 
           } else if (isUndefinedIdentifier(path, node.object, "module") &&
                      isProperty(node, "exports") &&
                      // TODO is this correct ?
                      moduleOverwritten) {
-            replaceExport(path, exports, "default");
+            replaceExport.call(_this, path, exports, "default");
           }
 
           this.traverse(path);
@@ -456,13 +452,13 @@ module.exports = function (options) {
           var node = path.node;
 
           if (isUndefinedIdentifier(path, node, "require")) {
-            warn(filePath, "Invalid " + $recast.print(node).code);
+            _this.warn("Invalid " + $recast.print(node).code);
 
           } else if (isUndefinedIdentifier(path, node, "exports")) {
-            warn(filePath, "Invalid " + $recast.print(node).code);
+            _this.warn("Invalid " + $recast.print(node).code);
 
           } else if (isUndefinedIdentifier(path, node, "module")) {
-            warn(filePath, "Invalid " + $recast.print(node).code);
+            _this.warn("Invalid " + $recast.print(node).code);
           }
 
           this.traverse(path);
@@ -478,6 +474,11 @@ module.exports = function (options) {
       //console.log(out.code);
 
       return out;
+    },
+
+    transformBundle: function (source) {
+      //console.log("transformBundle");
+      //console.log(source);
     }
   };
 };
