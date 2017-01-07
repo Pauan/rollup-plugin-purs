@@ -265,6 +265,9 @@ module.exports = function (options) {
       // TODO better filtering ?
       if (!filter(filePath)) return;
 
+      // TODO test if this optimization actually makes it faster or not
+      if (!/exports|module|require/.test(code)) return;
+
       var ast = $recast.parse(code, {
         sourceFileName: filePath
       });
