@@ -617,73 +617,77 @@ module.exports = function (options) {
 
     // Decurrying optimization
     transformBundle: function (code) {
-      if (options.uncurry) {
-        var _this = this;
+      var _this = this;
 
-        var ast = $recast.parse(code, {
-          // TODO is this correct ?
-          sourceFileName: "\0rollup-plugin-purs:bundle"
-        });
+      var ast = $recast.parse(code, {
+        // TODO is this correct ?
+        sourceFileName: "\0rollup-plugin-purs:bundle"
+      });
 
-        function visitBlockStatement(path) {
-          var node = path.node;
+      function visitBlockStatement(path) {
+        var node = path.node;
 
-          var body = [];
+        var body = [];
 
-          node.body.forEach(function (x) {
-            if (x.type === "FunctionDeclaration") {
+        node.body.forEach(function (x) {
+          if (x.type === "FunctionDeclaration") {
+            if (options.uncurry) {
               var uncurried = getCurried(x);
 
               if (uncurried !== null) {
                 makeUncurried(path, x.id, uncurried, body);
               }
+            }
 
-            } else if (x.type === "VariableDeclaration") {
-              x.declarations.forEach(function (x) {
-                if (x.init !== null && x.init.type === "FunctionExpression") {
+          } else if (x.type === "VariableDeclaration") {
+            x.declarations.forEach(function (x) {
+              if (x.init !== null && x.init.type === "FunctionExpression") {
+                if (options.uncurry) {
                   var uncurried = getCurried(x.init);
 
                   if (uncurried !== null) {
                     makeUncurried(path, x.id, uncurried, body);
                   }
                 }
-              });
-            }
+              }
+            });
+          }
 
-            body.push(x);
-          });
+          body.push(x);
+        });
 
-          node.body = body;
+        node.body = body;
 
-          this.traverse(path);
-        }
+        this.traverse(path);
+      }
 
-        $recast.types.visit(ast, {
-          visitProgram: visitBlockStatement,
-          visitBlockStatement: visitBlockStatement,
+      $recast.types.visit(ast, {
+        visitProgram: visitBlockStatement,
+        visitBlockStatement: visitBlockStatement,
 
-          visitCallExpression: function (path) {
-            var node = path.node;
+        visitCallExpression: function (path) {
+          var node = path.node;
 
+          if (options.uncurry) {
             var uncurried = getCurriedCall(path, node);
 
             if (uncurried !== null) {
               path.replace(uncurried);
             }
-
-            this.traverse(path);
           }
-        });
 
-        var out = $recast.print(ast, {
-          // TODO is this correct ?
-          sourceMapName: "\0rollup-plugin-purs:bundle.map"
-        });
+          this.traverse(path);
+        }
+      });
 
-        //console.log(out.code);
+      var out = $recast.print(ast, {
+        // TODO is this correct ?
+        sourceMapName: "\0rollup-plugin-purs:bundle.map"
+      });
 
-        return out;
-      }
+      //console.log(out.code);
+
+      return out;
     }
   };
 };
