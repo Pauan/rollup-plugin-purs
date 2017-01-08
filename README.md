@@ -35,6 +35,21 @@ In addition to `rollup-plugin-purs`, you will also need to use the [`rollup-plug
 This plugin does **not** compile PureScript code, so you will first need to run `pulp build` (or equivalent) before using this plugin.
 
 
+## Options
+
+These are the default options:
+
+```js
+purs({
+  include: undefined,
+  exclude: undefined,
+  outputDir: "output",  // Directory where the PureScript files are located
+  runMain: true,        // Whether to call the `main` function or not
+  uncurry: true         // Whether to apply the uncurrying optimization or not
+})
+```
+
+
 ## License
 
 MIT
