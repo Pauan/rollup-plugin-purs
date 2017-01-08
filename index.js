@@ -185,7 +185,7 @@ function replaceExport(path, exports, name) {
 }
 
 
-function getCurried(top) {
+function makeUncurried(path, id, top, body) {
   // Only decurry 1-argument functions
   if (top.params.length === 1) {
     var params = [top.params];
@@ -202,61 +202,64 @@ function getCurried(top) {
       params.push(x.params);
     }
 
-    if (x === top) {
-      return null;
+    if (x !== top) {
+      // TODO better flatten function ?
+      var flattened = [].concat.apply([], params);
 
-    } else {
-      return {
+      // TODO guarantee that collisions cannot occur ?
+      var temp = path.scope.declareTemporary(id.name + "__private_do_not_use_uncurried__" + flattened.length + "__");
+
+      // TODO is this correct ?
+      temp.loc = id.loc;
+
+      // TODO hacky
+      // TODO use path.scope.lookup ?
+      if (path.scope.curried == null) {
+        path.scope.curried = {};
+      }
+
+      path.scope.curried[id.name] = {
         params: params,
-        body: x.body,
+        identifier: temp
+      };
+
+      body.push({
+        type: "VariableDeclaration",
+        kind: "var",
+        declarations: [{
+          type: "VariableDeclarator",
+          id: temp,
+          init: {
+            type: "FunctionExpression",
+            id: null,
+            params: flattened,
+            body: x.body,
+            loc: top.loc
+          },
+          loc: top.loc
+        }],
         loc: top.loc
+      });
+
+      x.body = {
+        type: "BlockStatement",
+        body: [{
+          type: "ReturnStatement",
+          argument: {
+            type: "CallExpression",
+            callee: temp,
+            arguments: flattened,
+            // TODO is this loc correct ?
+            loc: x.body.loc
+          },
+          // TODO is this loc correct ?
+          loc: x.body.loc
+        }],
+        // TODO is this loc correct ?
+        loc: x.body.loc
       };
     }
-
-  } else {
-    return null;
   }
-}
-
-function makeUncurried(path, id, uncurried, body) {
-  var flattened = [].concat.apply([], uncurried.params);
-
-  // TODO guarantee that collisions cannot occur ?
-  var temp = path.scope.declareTemporary(id.name + "__private_do_not_use_uncurried__" + flattened.length + "__");
-
-  // TODO is this correct ?
-  temp.loc = id.loc;
-
-  // TODO hacky
-  // TODO use path.scope.lookup ?
-  if (path.scope.curried == null) {
-    path.scope.curried = {};
-  }
-
-  path.scope.curried[id.name] = {
-    used: false,
-    params: uncurried.params,
-    identifier: temp,
-    body: body,
-    declaration: {
-      type: "VariableDeclaration",
-      kind: "var",
-      declarations: [{
-        type: "VariableDeclarator",
-        id: temp,
-        init: {
-          type: "FunctionExpression",
-          id: null,
-          // TODO better flatten function
-          params: flattened,
-          body: uncurried.body,
-          loc: uncurried.loc
-        },
-        loc: uncurried.loc
-      }],
-      loc: uncurried.loc
-    }
-  };
 }
 
 function getCurriedCall(path, top) {
@@ -280,12 +283,6 @@ function getCurriedCall(path, top) {
       var curried = scope.curried[x.name];
 
       if (isArgumentsSaturated(curried.params, args)) {
-        if (!curried.used) {
-          curried.used = true;
-          // TODO is this correct ?
-          curried.body.unshift(curried.declaration);
-        }
-
         return {
           type: "CallExpression",
           callee: curried.identifier,
@@ -632,22 +629,14 @@ module.exports = function (options) {
         node.body.forEach(function (x) {
           if (x.type === "FunctionDeclaration") {
             if (options.uncurry) {
-              var uncurried = getCurried(x);
-
-              if (uncurried !== null) {
-                makeUncurried(path, x.id, uncurried, body);
-              }
+              makeUncurried(path, x.id, x, body);
             }
 
           } else if (x.type === "VariableDeclaration") {
             x.declarations.forEach(function (x) {
               if (x.init !== null && x.init.type === "FunctionExpression") {
                 if (options.uncurry) {
-                  var uncurried = getCurried(x.init);
-
-                  if (uncurried !== null) {
-                    makeUncurried(path, x.id, uncurried, body);
-                  }
+                  makeUncurried(path, x.id, x.init, body);
                 }
               }
             });
