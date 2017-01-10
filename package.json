@@ -5,6 +5,9 @@
   "repository": "Pauan/rollup-plugin-purs",
   "license": "MIT",
   "main": "index.js",
+  "bin": {
+    "convert-commonjs": "./bin/convert-commonjs.js"
+  },
   "dependencies": {
     "recast": "^0.11.18",
     "rollup-pluginutils": "^2.0.1"
