@@ -3,9 +3,9 @@ var $utils = require("rollup-pluginutils");
 var $path = require("path");
 var $fs = require("fs");
 
-var $convert = require("./convert");
-var $uncurry = require("./uncurry");
-var $inline = require("./inline");
+var $convert = require("./src/convert");
+var $uncurry = require("./src/uncurry");
+var $inline = require("./src/inline");
 
 
 function pursPath(options, path) {
