@@ -600,13 +600,13 @@ module.exports = function (options) {
           var node = path.node;
 
           if (isUndefinedIdentifier(path, node, "require")) {
-            _this.warn("Invalid " + $recast.print(node).code);
+            _this.warn("Dynamic " + $recast.print(node).code);
 
           } else if (isUndefinedIdentifier(path, node, "exports")) {
-            _this.warn("Invalid " + $recast.print(node).code);
+            _this.warn("Dynamic " + $recast.print(node).code);
 
           } else if (isUndefinedIdentifier(path, node, "module")) {
-            _this.warn("Invalid " + $recast.print(node).code);
+            _this.warn("Dynamic " + $recast.print(node).code);
           }
 
           this.traverse(path);
