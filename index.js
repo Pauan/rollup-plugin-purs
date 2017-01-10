@@ -316,6 +316,15 @@ function isArgumentsSaturated(expected, actual) {
 }
 
 
+function makeInlined(path, id, top, body) {
+
+}
+
+function getInlinedCall(path, top) {
+  return null;
+}
+
+
 module.exports = function (options) {
   if (options == null) {
     options = {};
@@ -331,6 +340,10 @@ module.exports = function (options) {
 
   if (options.uncurry == null) {
     options.uncurry = true;
+  }
+
+  if (options.inline == null) {
+    options.inline = true;
   }
 
   var filter = $utils.createFilter(options.include, options.exclude);
@@ -621,7 +634,7 @@ module.exports = function (options) {
         sourceFileName: "\0rollup-plugin-purs:bundle"
       });
 
-      function visitBlockStatement(path) {
+      function optimizeUncurry(path) {
         var node = path.node;
 
         var body = [];
@@ -650,9 +663,38 @@ module.exports = function (options) {
         this.traverse(path);
       }
 
+      function optimizeInline(path) {
+        var node = path.node;
+
+        var body = [];
+
+        node.body.forEach(function (x) {
+          if (x.type === "FunctionDeclaration") {
+            if (options.inline) {
+              makeInlined(path, x.id, x, body);
+            }
+
+          } else if (x.type === "VariableDeclaration") {
+            x.declarations.forEach(function (x) {
+              if (x.init !== null && x.init.type === "FunctionExpression") {
+                if (options.inline) {
+                  makeInlined(path, x.id, x.init, body);
+                }
+              }
+            });
+          }
+
+          body.push(x);
+        });
+
+        node.body = body;
+
+        this.traverse(path);
+      }
+
       $recast.types.visit(ast, {
-        visitProgram: visitBlockStatement,
-        visitBlockStatement: visitBlockStatement,
+        visitProgram: optimizeUncurry,
+        visitBlockStatement: optimizeUncurry,
 
         visitCallExpression: function (path) {
           var node = path.node;
@@ -662,6 +704,25 @@ module.exports = function (options) {
 
             if (uncurried !== null) {
               path.replace(uncurried);
+            }
+          }
+
+          this.traverse(path);
+        }
+      });
+
+      $recast.types.visit(ast, {
+        visitProgram: optimizeInline,
+        visitBlockStatement: optimizeInline,
+
+        visitCallExpression: function (path) {
+          var node = path.node;
+
+          if (options.inline) {
+            var inlined = getInlinedCall(path, node);
+
+            if (inlined !== null) {
+              path.replace(inlined);
             }
           }
 
