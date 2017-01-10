@@ -6,6 +6,7 @@ exports["uh"] = "bar3";
 exports["var"] = bar;
 exports["foo'"] = "bar5";
 exports.main = main;
+exports.hasOwnProperty = "hi!";
 //exports.main = main;
 
 function curriedFn1(a) {

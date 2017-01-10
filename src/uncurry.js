@@ -1,4 +1,5 @@
 var $recast = require("recast");
+var $util = require("./util");
 
 
 function makeUncurried(path, id, top, body) {
@@ -96,7 +97,7 @@ function getCurriedCall(path, top) {
 
     if (scope != null &&
         scope.curried != null &&
-        x.name in scope.curried) {
+        $util.hasKey(scope.curried, x.name)) {
       var curried = scope.curried[x.name];
 
       if (isArgumentsSaturated(curried.params, args)) {

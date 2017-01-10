@@ -1,4 +1,5 @@
 var $recast = require("recast");
+var $util = require("./util");
 
 
 function isValidIdentifier(x) {
@@ -63,9 +64,8 @@ function exportVar(path, imports, exports, identifier, expression, loc) {
 
   } else if (expression.type === "MemberExpression" &&
              expression.object.type === "Identifier") {
-    var file = imports[expression.object.name];
-
-    if (file != null) {
+    if ($util.hasKey(imports, expression.object.name)) {
+      var file = imports[expression.object.name];
       var from = toIdentifier(expression.property);
 
       if (from !== null) {
@@ -120,7 +120,7 @@ function exportVar(path, imports, exports, identifier, expression, loc) {
 
 
 function setExport(exports, name, value) {
-  if (exports[name] != null) {
+  if ($util.hasKey(exports, name)) {
     this.error("Variable " + name + " is already exported");
 
   } else {
@@ -150,9 +150,9 @@ function isProperty(x, name) {
 function replaceExport(path, exports, name) {
   var scope = path.scope.lookup(name);
 
-  var exported = exports[name];
+  if ($util.hasKey(exports, name)) {
+    var exported = exports[name];
 
-  if (exported != null) {
     if (scope === null || scope.isGlobal) {
       // TODO adjust the source maps ?
       path.replace(exported);
@@ -259,7 +259,9 @@ module.exports = function (code, filePath) {
             moduleOverwritten = true;
 
             for (var key in exports) {
-              _this.warn("Export " + key + " is ignored");
+              if ($util.hasKey(exports, key)) {
+                _this.warn("Export " + key + " is ignored");
+              }
             }
 
             // module.exports = { ... };
