@@ -43,13 +43,13 @@ function mergeLoc(x, y) {
 }
 
 
-function exportVar(path, imports, exports, identifier, expression, loc) {
+function exportVar(body, path, imports, exports, identifier, expression, loc) {
   if (expression.type === "Identifier") {
     // TODO adjust the loc ?
     setExport.call(this, exports, identifier.name, expression);
 
     // export { expression as identifier };
-    return {
+    body.push({
       type: "ExportNamedDeclaration",
       declaration: null,
       specifiers: [{
@@ -60,57 +60,72 @@ function exportVar(path, imports, exports, identifier, expression, loc) {
       }],
       source: null,
       loc: loc
-    };
+    });
+    return;
 
   } else if (expression.type === "MemberExpression" &&
-             expression.object.type === "Identifier") {
-    if ($util.hasKey(imports, expression.object.name)) {
-      var file = imports[expression.object.name];
-      var from = toIdentifier(expression.property);
+             expression.object.type === "Identifier" &&
+             $util.hasKey(imports, expression.object.name)) {
+    var file = imports[expression.object.name];
+    var from = toIdentifier(expression.property);
 
-      if (from !== null) {
-        // TODO adjust the loc ?
-        setExport.call(this, exports, identifier.name, expression);
+    if (from !== null) {
+      // TODO adjust the loc ?
+      setExport.call(this, exports, identifier.name, expression);
 
-        // export { from as identifier } from file;
-        return {
-          type: "ExportNamedDeclaration",
-          declaration: null,
-          specifiers: [{
-            type: "ExportSpecifier",
-            local: from,
-            exported: identifier,
-            loc: mergeLoc(from.loc, identifier.loc)
-          }],
-          source: file,
-          loc: loc
-        };
-      }
+      // export { from as identifier } from file;
+      body.push({
+        type: "ExportNamedDeclaration",
+        declaration: null,
+        specifiers: [{
+          type: "ExportSpecifier",
+          local: from,
+          exported: identifier,
+          loc: mergeLoc(from.loc, identifier.loc)
+        }],
+        source: file,
+        loc: loc
+      });
+      return;
     }
   }
 
   if (isUndefined(path, identifier.name)) {
-    // TODO adjust the loc ?
-    setExport.call(this, exports, identifier.name, identifier);
+    // TODO guarantee that collisions cannot occur ?
+    var temp = path.scope.declareTemporary(identifier.name + "__private_do_not_use_export__");
 
-    // export var identifier = expression;
-    return {
+    // TODO is this correct ?
+    temp.loc = identifier.loc;
+
+    // TODO adjust the loc ?
+    setExport.call(this, exports, identifier.name, temp);
+
+    // var temp = expression;
+    body.push({
+      type: "VariableDeclaration",
+      kind: "var",
+      declarations: [{
+        type: "VariableDeclarator",
+        id: temp,
+        init: expression,
+        loc: mergeLoc(temp.loc, expression.loc)
+      }],
+      loc: loc
+    });
+
+    // export { temp as identifier };
+    body.push({
       type: "ExportNamedDeclaration",
-      declaration: {
-        type: "VariableDeclaration",
-        kind: "var",
-        declarations: [{
-          type: "VariableDeclarator",
-          id: identifier,
-          init: expression,
-          loc: mergeLoc(identifier.loc, expression.loc)
-        }],
-        loc: loc
-      },
-      specifiers: [],
+      declaration: null,
+      specifiers: [{
+        type: "ExportSpecifier",
+        local: temp,
+        exported: identifier,
+        loc: mergeLoc(temp.loc, identifier.loc)
+      }],
       source: null,
       loc: loc
-    };
+    });
 
   } else {
     // TODO maybe this should warn instead ?
@@ -247,7 +262,7 @@ module.exports = function (code, filePath) {
                 _this.warn("Export " + identifier.name + " is ignored");
               }
 
-              body.push(exportVar.call(_this, path, imports, exports, identifier, x.expression.right, x.loc));
+              exportVar.call(_this, body, path, imports, exports, identifier, x.expression.right, x.loc);
 
             } else {
               body.push(x);
@@ -273,7 +288,7 @@ module.exports = function (code, filePath) {
                 // foo: bar
                 if (identifier !== null) {
                   // TODO handle get/set different ?
-                  body.push(exportVar.call(_this, path, imports, exports, identifier, x.value, x.loc));
+                  exportVar.call(_this, body, path, imports, exports, identifier, x.value, x.loc);
 
                 } else {
                   _this.warn("Invalid module export: " + $recast.print(x).code);

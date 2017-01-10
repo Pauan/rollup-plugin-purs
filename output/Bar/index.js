@@ -7,7 +7,10 @@ exports["var"] = bar;
 exports["foo'"] = "bar5";
 exports.main = main;
 exports.hasOwnProperty = "hi!";
+exports.null = 10;
 //exports.main = main;
+
+console.log(exports.null);
 
 function curriedFn1(a) {
   return function () {
