@@ -50,6 +50,27 @@ purs({
 ```
 
 
+## Comment pragmas
+
+You can disable certain warnings by including a special comment in your code:
+
+```
+// rollup-plugin-purs ignore dynamic exports
+```
+
+```
+// rollup-plugin-purs ignore dynamic require
+```
+
+```
+// rollup-plugin-purs ignore dynamic module
+```
+
+Each comment disables a specific warning.
+
+The comments must be exactly the same as above, and they must be placed at the top-level of your code, with zero spaces to the left of the comment.
+
+
 ## License
 
 MIT
