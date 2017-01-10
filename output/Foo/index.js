@@ -1,3 +1,4 @@
+// rollup-plugin-purs ignore dynamic exports
 "use strict";
 
 var $bar = require("../Bar");

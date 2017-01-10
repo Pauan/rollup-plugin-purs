@@ -194,6 +194,30 @@ module.exports = function (code, filePath) {
 
   var moduleOverwritten = false;
 
+  var warnOnDynamicExports = true;
+  var warnOnDynamicRequire = true;
+  var warnOnDynamicModule = true;
+
+  var comments = $util.matches(code, /(?:^|\n|\r\n)\/\/ rollup-plugin-purs (.+)/g);
+
+  comments.forEach(function (a) {
+    var x = a[0];
+
+    switch (x) {
+    case "ignore dynamic exports":
+      warnOnDynamicExports = false;
+      break;
+    case "ignore dynamic require":
+      warnOnDynamicRequire = false;
+      break;
+    case "ignore dynamic module":
+      warnOnDynamicModule = false;
+      break;
+    default:
+      throw new Error("Unknown rollup-plugin-purs pragma: " + x);
+    }
+  });
+
   $recast.types.visit(ast, {
     visitProgram: function (path) {
       var node = path.node;
@@ -374,13 +398,13 @@ module.exports = function (code, filePath) {
     visitIdentifier: function (path) {
       var node = path.node;
 
-      if (isUndefinedIdentifier(path, node, "require")) {
+      if (warnOnDynamicRequire && isUndefinedIdentifier(path, node, "require")) {
         _this.warn("Dynamic " + $recast.print(node).code);
 
-      } else if (isUndefinedIdentifier(path, node, "exports")) {
+      } else if (warnOnDynamicExports && isUndefinedIdentifier(path, node, "exports")) {
         _this.warn("Dynamic " + $recast.print(node).code);
 
-      } else if (isUndefinedIdentifier(path, node, "module")) {
+      } else if (warnOnDynamicModule && isUndefinedIdentifier(path, node, "module")) {
         _this.warn("Dynamic " + $recast.print(node).code);
       }
 
