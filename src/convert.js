@@ -9,6 +9,10 @@ function isValidIdentifier(x) {
 
 function stringToIdentifier(x) {
   if (x.type === "Literal" && typeof x.value === "string" && isValidIdentifier(x.value)) {
+    if (/'/.test(x.value)) {
+      this.warn("Primes are not allowed in JavaScript identifiers: " + x.value);
+    }
+
     return {
       type: "Identifier",
       name: x.value.replace(/'/g, "$prime"),
@@ -26,7 +30,7 @@ function toIdentifier(x) {
     return x;
 
   } else {
-    return stringToIdentifier(x);
+    return stringToIdentifier.call(this, x);
   }
 }
 
@@ -67,7 +71,7 @@ function exportVar(body, path, imports, exports, identifier, expression, loc) {
              expression.object.type === "Identifier" &&
              $util.hasKey(imports, expression.object.name)) {
     var file = imports[expression.object.name];
-    var from = toIdentifier(expression.property);
+    var from = toIdentifier.call(this, expression.property);
 
     if (from !== null) {
       // TODO adjust the loc ?
@@ -278,7 +282,7 @@ module.exports = function (code, filePath) {
           // TODO handle module.exports.foo ?
           if (isUndefinedIdentifier(path, x.expression.left.object, "exports")) {
             // TODO what about computed expressions ?
-            var identifier = toIdentifier(x.expression.left.property);
+            var identifier = toIdentifier.call(_this, x.expression.left.property);
 
             // exports.foo = bar;
             if (identifier !== null) {
@@ -307,7 +311,7 @@ module.exports = function (code, filePath) {
             if (x.expression.right.type === "ObjectExpression") {
               x.expression.right.properties.forEach(function (x) {
                 // TODO what about computed expressions ?
-                var identifier = toIdentifier(x.key);
+                var identifier = toIdentifier.call(_this, x.key);
 
                 // foo: bar
                 if (identifier !== null) {
@@ -367,7 +371,7 @@ module.exports = function (code, filePath) {
     visitMemberExpression: function (path) {
       var node = path.node;
 
-      var identifier = stringToIdentifier(node.property);
+      var identifier = stringToIdentifier.call(_this, node.property);
 
       // foo["bar"] = qux;
       if (identifier !== null && node.computed) {
