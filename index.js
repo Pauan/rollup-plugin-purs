@@ -49,9 +49,7 @@ module.exports = function (options) {
     options: function (rollup) {
       if (options.runMain &&
           rollup.entry != null &&
-          rollup.entry !== entryPath &&
-          // TODO a bit hacky
-          $path.extname(rollup.entry) === ".purs") {
+          rollup.entry !== entryPath) {
         entry = rollup.entry;
         rollup.entry = entryPath;
       }
