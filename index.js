@@ -109,8 +109,15 @@ module.exports = function (options) {
         sourceFileName: "\0rollup-plugin-purs:bundle"
       });
 
-      $uncurry.call(this, options, ast);
-      $inline.call(this, options, ast);
+      var scope = $utils.attachScopes(ast, "scope");
+
+      if (options.uncurry) {
+        ast = $uncurry.call(this, ast, scope);
+      }
+
+      if (options.inline) {
+        ast = $inline.call(this, ast, scope);
+      }
 
       var out = $recast.print(ast, {
         // TODO is this correct ?

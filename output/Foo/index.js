@@ -15,22 +15,53 @@ var bar2 = require("../Bar")
 //var require = 50;
 
 function inlined1(a, b, c) {
-  return a + b + c;
+  return a + 1 + b + 1 + c + 1;
 }
 
-function inlined2(a, b, c) {
-  return a + b + c + function (inlined2) {
-    return inlined2(a, b, c);
+var inlined2 = function (a, b, c) {
+  return a + 1 + b + 1 + c + 1;
+};
+
+function inlined3(a, b, c) {
+  return a + b + c + function (d) {
+    return function () {
+      return function () {
+        return function () {
+          return d();
+        };
+      };
+    };
+  };
+}
+
+function inlined4(a, b, c) {
+  return a + b + c + function (inlined4) {
+    return inlined4();
   };
 }
 
 function recursive(a, b, c) {
-  return recursive(a, b, c);
+  return recursive(a + 1, b + 1, c + 1);
 }
 
+function mutualRecursive1(a, b, c) {
+  return mutualRecursive2(a + 1, b + 1, c + 1);
+}
+
+function mutualRecursive2(a, b, c) {
+  return mutualRecursive1(a + 2, b + 2, c + 2);
+}
+
+var a = 1;
+
 console.log(inlined1(1, 2, 3));
+console.log(inlined2(a, 2, 3));
+console.log(inlined3(a, 2, 3));
+console.log(inlined4(a, 2, 3));
+console.log((function (a) { return inlined1(a, 2, 3); })(1));
 console.log(inlined2(1, 2, 3));
 console.log(recursive(1, 2, 3));
+console.log(mutualRecursive1(1, 2, 3));
 
 function foo(require, exports, module) {
   var x = require("foo");

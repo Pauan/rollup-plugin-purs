@@ -9,7 +9,9 @@ export default {
   treeshake: true,
   plugins: [
     purs({
-      outputDir: "../output"
+      outputDir: "../output",
+      inline: true,
+      uncurry: true
     }),
     resolve()
   ]

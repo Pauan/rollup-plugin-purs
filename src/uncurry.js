@@ -135,7 +135,7 @@ function isArgumentsSaturated(expected, actual) {
 }
 
 
-module.exports = function (options, ast) {
+module.exports = function (ast) {
   function optimizeUncurry(path) {
     var node = path.node;
 
@@ -143,16 +143,12 @@ module.exports = function (options, ast) {
 
     node.body.forEach(function (x) {
       if (x.type === "FunctionDeclaration") {
-        if (options.uncurry) {
-          makeUncurried(path, x.id, x, body);
-        }
+        makeUncurried(path, x.id, x, body);
 
       } else if (x.type === "VariableDeclaration") {
         x.declarations.forEach(function (x) {
           if (x.init !== null && x.init.type === "FunctionExpression") {
-            if (options.uncurry) {
-              makeUncurried(path, x.id, x.init, body);
-            }
+            makeUncurried(path, x.id, x.init, body);
           }
         });
       }
@@ -163,7 +159,7 @@ module.exports = function (options, ast) {
     node.body = body;
 
     this.traverse(path);
-  }
+  };
 
   $recast.types.visit(ast, {
     visitProgram: optimizeUncurry,
@@ -172,15 +168,15 @@ module.exports = function (options, ast) {
     visitCallExpression: function (path) {
       var node = path.node;
 
-      if (options.uncurry) {
-        var uncurried = getCurriedCall(path, node);
+      var uncurried = getCurriedCall(path, node);
 
-        if (uncurried !== null) {
-          path.replace(uncurried);
-        }
+      if (uncurried !== null) {
+        path.replace(uncurried);
       }
 
       this.traverse(path);
     }
   });
+
+  return ast;
 };

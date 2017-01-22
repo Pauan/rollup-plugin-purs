@@ -17,3 +17,18 @@ exports.matches = function (string, re) {
     }
   }
 };
+
+// TODO make this a pull request for https://github.com/rollup/rollup-pluginutils
+exports.lookup = function (scope, name) {
+  for (;;) {
+    if (scope.declarations[name]) {
+      return scope;
+
+    } else if (scope.parent != null) {
+      scope = scope.parent;
+
+    } else {
+      return null;
+    }
+  }
+};
