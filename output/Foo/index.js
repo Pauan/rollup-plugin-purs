@@ -14,6 +14,24 @@ var bar2 = require("../Bar")
 
 //var require = 50;
 
+function inlined1(a, b, c) {
+  return a + b + c;
+}
+
+function inlined2(a, b, c) {
+  return a + b + c + function (inlined2) {
+    return inlined2(a, b, c);
+  };
+}
+
+function recursive(a, b, c) {
+  return recursive(a, b, c);
+}
+
+console.log(inlined1(1, 2, 3));
+console.log(inlined2(1, 2, 3));
+console.log(recursive(1, 2, 3));
+
 function foo(require, exports, module) {
   var x = require("foo");
   exports.foo = 5;

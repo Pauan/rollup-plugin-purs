@@ -11,6 +11,7 @@ function makeInlined(path, id, top, body) {
       body[0].argument.type !== "FunctionExpression" &&
       top.params.every(function (x) { return x.type === "Identifier"; })) {
 
+    var recursive = false;
     var seen = {};
 
     top.params.forEach(function (x) {
@@ -21,6 +22,11 @@ function makeInlined(path, id, top, body) {
       visitIdentifier: function (path) {
         var node = path.node;
 
+        // TODO super hacky check
+        if (node.name === id.name) {
+          recursive = true;
+        }
+
         if ($util.hasKey(seen, node.name)) {
           ++seen[node.name];
         }
@@ -29,7 +35,9 @@ function makeInlined(path, id, top, body) {
       }
     });
 
-    if (top.params.every(function (x) { return seen[x.name] <= 1; })) {
+    if (!recursive &&
+        top.params.every(function (x) { return seen[x.name] <= 1; })) {
+
       var indexes = {};
 
       top.params.forEach(function (x, i) {
