@@ -262,10 +262,10 @@ function lookupInlinedCall(top, scope) {
 
 
 function findInlineFunctions(ast, scope) {
-  // TODO use $walk.scope ?
-  return $walk.raw(ast, function (node, traverse) {
+  return $walk.scope(ast, scope, function (node, scope, traverse) {
     if (node.type === "FunctionDeclaration") {
-      makeInlined(node.id, node, scope);
+      // TODO is this scope correct ?
+      makeInlined(node.id, node, scope.parent);
 
     } else if (node.type === "VariableDeclaration") {
       node.declarations.forEach(function (x) {
@@ -275,20 +275,7 @@ function findInlineFunctions(ast, scope) {
       });
     }
 
-    // TODO code duplication
-    if (node.scope != null) {
-      scope = node.scope;
-    }
-
-    try {
-      traverse(node);
-
-    } finally {
-      // TODO is this correct ?
-      if (node.scope != null) {
-        scope = scope.parent;
-      }
-    }
+    traverse(node);
 
     return node;
   });

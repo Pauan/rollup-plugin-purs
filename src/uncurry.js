@@ -138,7 +138,7 @@ function isArgumentsSaturated(expected, actual) {
 
 
 function findUncurried(ast, scope) {
-  return $walk.raw(ast, function (node, traverse) {
+  return $walk.scope(ast, scope, function (node, scope, traverse) {
     if (node.type === "Program" || node.type === "BlockStatement") {
       var body = [];
 
@@ -160,20 +160,7 @@ function findUncurried(ast, scope) {
       node.body = body;
     }
 
-    // TODO code duplication
-    if (node.scope != null) {
-      scope = node.scope;
-    }
-
-    try {
-      traverse(node);
-
-    } finally {
-      // TODO is this correct ?
-      if (node.scope != null) {
-        scope = scope.parent;
-      }
-    }
+    traverse(node);
 
     return node;
   });

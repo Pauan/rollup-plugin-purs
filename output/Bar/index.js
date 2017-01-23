@@ -58,6 +58,7 @@ function main() {
   }
 
   var innerCurriedVar = innerCurried;
+  var innerCurriedVar2 = innerCurriedVar;
 
   function innerCurried2(a) {
     return function (b) {
@@ -81,6 +82,7 @@ function main() {
     //var innerCurried = 10;
     console.log(innerCurried(1)(2)(3));
     console.log(innerCurriedVar(1)(2)(3));
+    console.log(innerCurriedVar2(1)(2)(3));
   })();
 
   console.log(curriedFnVar(1)(2)(3));
