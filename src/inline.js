@@ -57,7 +57,7 @@ var weights = {
 function calculateWeight(node) {
   var weight = 0;
 
-  $walk(node, function (node, traverse) {
+  $walk.raw(node, function (node, traverse) {
     if (node.type === "Literal") {
       weight += ("" + node.value).length;
 
@@ -262,7 +262,8 @@ function lookupInlinedCall(top, scope) {
 
 
 function findInlineFunctions(ast, scope) {
-  return $walk(ast, function (node, traverse) {
+  // TODO use $walk.scope ?
+  return $walk.raw(ast, function (node, traverse) {
     if (node.type === "FunctionDeclaration") {
       makeInlined(node.id, node, scope);
 
@@ -274,6 +275,7 @@ function findInlineFunctions(ast, scope) {
       });
     }
 
+    // TODO code duplication
     if (node.scope != null) {
       scope = node.scope;
     }
@@ -321,69 +323,57 @@ function inlineFunctionCalls(ast, scope) {
   // TODO is this correct ?
   var recursive = false;
 
-  return $walk(ast, function (node, traverse) {
-    if (node.scope != null) {
-      scope = node.scope;
-    }
+  return $walk.scope(ast, scope, function (node, scope, traverse) {
+    // TODO code duplication
+    if (node.type === "FunctionDeclaration") {
+      return pushInline(node.id, scope, stack, traverse, node);
 
-    try {
-      // TODO code duplication
-      if (node.type === "FunctionDeclaration") {
-        return pushInline(node.id, scope, stack, traverse, node);
+    // TODO code duplication
+    } else if (node.type === "VariableDeclaration") {
+      // TODO should this traverse twice...?
+      node.declarations.forEach(function (x) {
+        if (x.init !== null && x.init.type === "FunctionExpression") {
+          // TODO is this correct ?
+          pushInline(x.id, scope, stack, traverse, x);
+        }
+      });
 
-      // TODO code duplication
-      } else if (node.type === "VariableDeclaration") {
-        // TODO should this traverse twice...?
-        node.declarations.forEach(function (x) {
-          if (x.init !== null && x.init.type === "FunctionExpression") {
-            // TODO is this correct ?
-            pushInline(x.id, scope, stack, traverse, x);
+    } else if (node.type === "CallExpression") {
+      var inlined = lookupInlinedCall(node, scope);
+
+      if (inlined !== null) {
+        if (stack.indexOf(inlined.name.name) === -1) {
+          recursive = false;
+
+          stack.push(inlined.name.name);
+
+          try {
+            traverse(inlined.expression);
+
+          } finally {
+            stack.pop();
           }
-        });
 
-      } else if (node.type === "CallExpression") {
-        var inlined = lookupInlinedCall(node, scope);
-
-        if (inlined !== null) {
-          if (stack.indexOf(inlined.name.name) === -1) {
+          if (recursive) {
+            // TODO should this traverse or not ?
             recursive = false;
 
-            stack.push(inlined.name.name);
-
-            try {
-              traverse(inlined.expression);
-
-            } finally {
-              stack.pop();
-            }
-
-            if (recursive) {
-              // TODO should this traverse or not ?
-              recursive = false;
-
-            } else {
-              return inlined.expression;
-            }
-
           } else {
-            // TODO is there a better way of doing this ?
-            recursive = true;
-            // TODO should this traverse ?
-            return node;
+            return inlined.expression;
           }
+
+        } else {
+          // TODO is there a better way of doing this ?
+          recursive = true;
+          // TODO should this traverse ?
+          return node;
         }
       }
-
-      traverse(node);
-
-      return node;
-
-    } finally {
-      // TODO is this correct ?
-      if (node.scope != null) {
-        scope = scope.parent;
-      }
     }
+
+    traverse(node);
+
+    return node;
   });
 }
 

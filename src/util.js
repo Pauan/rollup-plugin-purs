@@ -32,3 +32,17 @@ exports.lookup = function (scope, name) {
     }
   }
 };
+
+var tempIndex = 0;
+
+// TODO make this a pull request for https://github.com/rollup/rollup-pluginutils
+exports.makeTemporary = function (scope, name) {
+  for (;;) {
+    var mangled = name + "__temp" + (++tempIndex) + "__";
+
+    if (!scope.declarations[mangled]) {
+      scope.declarations[mangled] = true;
+      return mangled;
+    }
+  }
+};

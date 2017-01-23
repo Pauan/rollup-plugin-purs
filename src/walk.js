@@ -34,4 +34,22 @@ function walk(node, fn) {
   return fn(node, traverse);
 }
 
-module.exports = walk;
+exports.raw = walk;
+
+exports.scope = function (ast, scope, fn) {
+  return walk(ast, function (node, traverse) {
+    if (node.scope != null) {
+      scope = node.scope;
+    }
+
+    try {
+      return fn(node, scope, traverse);
+
+    } finally {
+      // TODO is this correct ?
+      if (node.scope != null) {
+        scope = scope.parent;
+      }
+    }
+  });
+};

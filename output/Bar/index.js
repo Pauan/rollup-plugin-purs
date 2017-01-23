@@ -46,6 +46,8 @@ exports.curried = function (a) {
   };
 };
 
+var curriedFnVar = exports.curried;
+
 function main() {
   function innerCurried(a) {
     return function (b) {
@@ -54,6 +56,8 @@ function main() {
       };
     };
   }
+
+  var innerCurriedVar = innerCurried;
 
   function innerCurried2(a) {
     return function (b) {
@@ -76,8 +80,10 @@ function main() {
   (function () {
     //var innerCurried = 10;
     console.log(innerCurried(1)(2)(3));
+    console.log(innerCurriedVar(1)(2)(3));
   })();
 
+  console.log(curriedFnVar(1)(2)(3));
   console.log(curriedFn1(1), curriedFn1(1)());
   console.log(curriedFn2(1, 2)(3)(4)());
   console.log(innerCurried2(1)(2));

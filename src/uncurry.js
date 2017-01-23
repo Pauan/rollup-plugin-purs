@@ -1,8 +1,8 @@
-var $recast = require("recast");
+var $walk = require("./walk");
 var $util = require("./util");
 
 
-function makeUncurried(path, id, top, body) {
+function makeUncurried(scope, id, top, body) {
   // Only decurry 1-argument functions
   if (top.params.length === 1) {
     var params = [top.params];
@@ -24,18 +24,20 @@ function makeUncurried(path, id, top, body) {
       var flattened = [].concat.apply([], params);
 
       // TODO guarantee that collisions cannot occur ?
-      var temp = path.scope.declareTemporary(id.name + "__private_do_not_use_uncurried__" + flattened.length + "__");
-
-      // TODO is this correct ?
-      temp.loc = id.loc;
+      var temp = {
+        type: "Identifier",
+        name: $util.makeTemporary(scope, id.name + "__uncurried"),
+        // TODO is this correct ?
+        loc: id.loc
+      };
 
       // TODO hacky
-      // TODO use path.scope.lookup ?
-      if (path.scope.curried == null) {
-        path.scope.curried = {};
+      // TODO use $util.lookup ?
+      if (scope.curried == null) {
+        scope.curried = {};
       }
 
-      path.scope.curried[id.name] = {
+      scope.curried[id.name] = {
         params: params,
         identifier: temp
       };
@@ -80,7 +82,7 @@ function makeUncurried(path, id, top, body) {
 }
 
 
-function getCurriedCall(path, top) {
+function getCurriedCall(top, scope) {
   var args = [];
 
   var x = top;
@@ -93,12 +95,12 @@ function getCurriedCall(path, top) {
   args.reverse();
 
   if (x.type === "Identifier") {
-    var scope = path.scope.lookup(x.name);
+    var def = $util.lookup(scope, x.name);
 
-    if (scope != null &&
-        scope.curried != null &&
-        $util.hasKey(scope.curried, x.name)) {
-      var curried = scope.curried[x.name];
+    if (def != null &&
+        def.curried != null &&
+        $util.hasKey(def.curried, x.name)) {
+      var curried = def.curried[x.name];
 
       if (isArgumentsSaturated(curried.params, args)) {
         return {
@@ -135,48 +137,64 @@ function isArgumentsSaturated(expected, actual) {
 }
 
 
-module.exports = function (ast) {
-  function optimizeUncurry(path) {
-    var node = path.node;
+function findUncurried(ast, scope) {
+  return $walk.raw(ast, function (node, traverse) {
+    if (node.type === "Program" || node.type === "BlockStatement") {
+      var body = [];
 
-    var body = [];
+      node.body.forEach(function (x) {
+        if (x.type === "FunctionDeclaration") {
+          makeUncurried(scope, x.id, x, body);
 
-    node.body.forEach(function (x) {
-      if (x.type === "FunctionDeclaration") {
-        makeUncurried(path, x.id, x, body);
+        } else if (x.type === "VariableDeclaration") {
+          x.declarations.forEach(function (x) {
+            if (x.init !== null && x.init.type === "FunctionExpression") {
+              makeUncurried(scope, x.id, x.init, body);
+            }
+          });
+        }
 
-      } else if (x.type === "VariableDeclaration") {
-        x.declarations.forEach(function (x) {
-          if (x.init !== null && x.init.type === "FunctionExpression") {
-            makeUncurried(path, x.id, x.init, body);
-          }
-        });
-      }
+        body.push(x);
+      });
 
-      body.push(x);
-    });
-
-    node.body = body;
-
-    this.traverse(path);
-  };
-
-  $recast.types.visit(ast, {
-    visitProgram: optimizeUncurry,
-    visitBlockStatement: optimizeUncurry,
-
-    visitCallExpression: function (path) {
-      var node = path.node;
-
-      var uncurried = getCurriedCall(path, node);
-
-      if (uncurried !== null) {
-        path.replace(uncurried);
-      }
-
-      this.traverse(path);
+      node.body = body;
     }
-  });
 
-  return ast;
+    // TODO code duplication
+    if (node.scope != null) {
+      scope = node.scope;
+    }
+
+    try {
+      traverse(node);
+
+    } finally {
+      // TODO is this correct ?
+      if (node.scope != null) {
+        scope = scope.parent;
+      }
+    }
+
+    return node;
+  });
+}
+
+
+function uncurryCalls(ast, scope) {
+  return $walk.scope(ast, scope, function (node, scope, traverse) {
+    var uncurried = getCurriedCall(node, scope);
+
+    if (uncurried !== null) {
+      node = uncurried;
+    }
+
+    traverse(node);
+
+    return node;
+  });
+}
+
+
+module.exports = function (ast, scope) {
+  return uncurryCalls(findUncurried(ast, scope), scope);
 };
