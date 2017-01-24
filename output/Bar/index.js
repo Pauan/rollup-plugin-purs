@@ -68,6 +68,12 @@ function main() {
   var innerCurriedVar = innerCurried;
   var innerCurriedVar2 = innerCurriedVar;
 
+  var propagated = (10 + 50, 20, 30);
+  var notPropagated = (delete a.bar, 50);
+
+  console.log(propagated);
+  console.log(notPropagated);
+
   function innerCurried2(a) {
     return function (b) {
       return function (c) {

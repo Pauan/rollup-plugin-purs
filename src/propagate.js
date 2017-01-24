@@ -3,12 +3,114 @@ var $util = require("./util");
 var $isReference = require("is-reference");
 
 
-function isSimple(id, init) {
-  return (init.type === "Identifier" &&
-          // Don't propagate it if the new name is the same as the old name
-          id.name !== init.name) ||
-         // TODO What about regexps ?
-         init.type === "Literal";
+// TODO maybe use walk instead ?
+/*function isPure(x) {
+  return (x === null) ||
+         (x.type === "Program" && x.body.body(isPure)) ||
+         (x.type === "EmptyStatement") ||
+         (x.type === "BlockStatement" && x.body.every(isPure)) ||
+         (x.type === "ExpressionStatement" && isPure(x.expression)) ||
+         (x.type === "IfStatement" && isPure(x.test) && isPure(x.consequent) && isPure(x.alternate)) ||
+         (x.type === "LabeledStatement" && isPure(x.body)) ||
+         // TODO should this be considered pure ?
+         (x.type === "BreakStatement") ||
+         // TODO should this be considered pure ?
+         (x.type === "ContinueStatement") ||
+         // TODO should this be considered pure ?
+         (x.type === "WithStatement" && isPure(x.object) && isPure(x.body)) ||
+         (x.type === "SwitchStatement" && isPure(x.discriminant) && x.cases.every(isPure)) ||
+         // TODO should this be considered pure ?
+         (x.type === "ReturnStatement" && isPure(x.argument)) ||
+         // TODO should this be considered pure ?
+         (x.type === "ThrowStatement" && isPure(x.argument)) ||
+         // TODO what about non-standard extensions ?
+         (x.type === "TryStatement" && isPure(x.block) && isPure(x.handler) && isPure(x.finalizer)) ||
+         // TODO what about non-standard extensions ?
+         // TODO what about patterns ?
+         (x.type === "CatchClause" && isPure(x.body)) ||
+         (x.type === "WhileStatement" &&
+         ;
+}*/
+
+
+// TODO what about MemberExpression ?
+// TODO DoExpression
+// TODO BindExpression
+// TODO MetaProperty
+// TODO DirectiveLiteral
+// TODO SpreadProperty
+// TODO GeneratorExpression
+// TODO ComprehensionExpression
+// TODO TaggedTemplateExpression
+// TODO TemplateLiteral
+// TODO what about AwaitExpression ?
+// TODO TypeCastExpression
+// TODO JSXMemberExpression
+// TODO JSXExpressionContainer
+// TODO JSXElement
+// TODO JSXEmptyExpression
+// TODO JSXText
+// TODO check for other expressions
+function isPureExpression(x) {
+  return (x === null) ||
+         (x.type === "FunctionExpression") ||
+         (x.type === "ThisExpression") ||
+         (x.type === "ArrayExpression" && x.elements.every(isPureExpression)) ||
+         (x.type === "ObjectExpression" && x.properties.every(isPureExpression)) ||
+         (x.type === "Property" && isPureExpression(x.key) && isPureExpression(x.value)) ||
+         (x.type === "SequenceExpression" && x.expressions.every(isPureExpression)) ||
+         (x.type === "UnaryExpression" && x.operator !== "delete" && isPureExpression(x.argument)) ||
+         (x.type === "BinaryExpression" && isPureExpression(x.left) && isPureExpression(x.right)) ||
+         (x.type === "LogicalExpression" && isPureExpression(x.left) && isPureExpression(x.right)) ||
+         (x.type === "ConditionalExpression" &&
+          isPureExpression(x.test) &&
+          isPureExpression(x.consequent) &&
+          isPureExpression(x.alternate)) ||
+         (x.type === "Identifier") ||
+         (x.type === "Literal") ||
+         // TODO is this an expression ?
+         (x.type === "Noop") ||
+         // TODO is this correct ?
+         (x.type === "Super") ||
+         (x.type === "ParenthesizedExpression" && isPureExpression(x.expression)) ||
+         (x.type === "ObjectMethod") ||
+         // TODO is this correct ?
+         (x.type === "ObjectProperty" && isPureExpression(x.key) && isPureExpression(x.value)) ||
+         (x.type === "ArrowFunctionExpression") ||
+         (x.type === "SpreadElement" && isPureExpression(x.argument)) ||
+         (x.type === "ClassExpression" && isPureExpression(x.superClass) && x.implements.every(isPureExpression)) ||
+         (x.type === "ClassImplements" && isPureExpression(x.superClass)) ||
+         (x.type === "SpreadProperty" && isPureExpression(x.argument));
+}
+
+
+function isSimple(x) {
+  if (x.type === "Identifier" ||
+      // TODO What about regexps ?
+      x.type === "Literal") {
+    return x;
+
+  } else if (x.type === "SequenceExpression") {
+    if (x.expressions.length > 0) {
+      var last = x.expressions[x.expressions.length - 1];
+
+      // TODO make this more efficient ?
+      // TODO only require purity for all but the last element
+      // TODO even if the expressions aren't pure, we can still return the last element
+      if (x.expressions.every(isPureExpression) && isSimple(last)) {
+        return last;
+
+      } else {
+        return null;
+      }
+
+    } else {
+      return x;
+    }
+
+  } else {
+    return null;
+  }
 }
 
 
@@ -19,13 +121,22 @@ function findReferences(ast, scope) {
 
       node.declarations.forEach(function (x) {
         if (x.id.type === "Identifier" &&
-            x.init !== null &&
-            isSimple(x.id, x.init)) {
-          if (scope.propagating == null) {
-            scope.propagating = {};
-          }
+            x.init !== null) {
+          var replace = isSimple(x.init);
 
-          scope.propagating[x.id.name] = x.init;
+          if (replace !== null &&
+              // Don't propagate it if the new name is the same as the old name
+              !(replace.type === "Identifier" &&
+                replace.name === x.id.name)) {
+            if (scope.propagating == null) {
+              scope.propagating = {};
+            }
+
+            scope.propagating[x.id.name] = replace;
+
+          } else {
+            declarations.push(x);
+          }
 
         } else {
           declarations.push(x);

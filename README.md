@@ -72,6 +72,13 @@ Each comment disables a specific warning.
 The comments must be exactly the same as above, and they must be placed at the top-level of your code, with zero spaces to the left of the comment.
 
 
+## Optimizations
+
+In addition to the uncurrying and inlining optimizations, there are some optimizations which are *always* applied:
+
+* Constant propagation
+
+
 ## License
 
 MIT
