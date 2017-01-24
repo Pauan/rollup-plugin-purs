@@ -1,12 +1,14 @@
 // rollup-plugin-purs ignore dynamic exports
 "use strict";
 
-//module.exports = require('process');
-
 var $bar = require("../Bar");
 
 var bar2 = require("../Bar")
   , _test1 = 20;
+
+var $qux = require("../Qux");
+
+console.log($qux.default);
 
 //var ___ = require("foo" + "bar");
 

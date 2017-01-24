@@ -1,4 +1,6 @@
 var $recast = require("recast");
+var $utils = require("rollup-pluginutils");
+var $walk = require("./walk");
 var $util = require("./util");
 
 
@@ -47,7 +49,7 @@ function mergeLoc(x, y) {
 }
 
 
-function exportVar(body, path, imports, exports, identifier, expression, loc) {
+function exportVar(body, scope, imports, exports, identifier, expression, loc) {
   if (expression.type === "Identifier") {
     // TODO adjust the loc ?
     setExport.call(this, exports, identifier.name, expression);
@@ -94,12 +96,14 @@ function exportVar(body, path, imports, exports, identifier, expression, loc) {
     }
   }
 
-  if (isUndefined(path, identifier.name)) {
+  if (isUndefined(scope, identifier.name)) {
     // TODO guarantee that collisions cannot occur ?
-    var temp = path.scope.declareTemporary(identifier.name + "__private_do_not_use_export__");
-
-    // TODO is this correct ?
-    temp.loc = identifier.loc;
+    var temp = {
+      type: "Identifier",
+      name: $util.makeTemporary(scope, identifier.name),
+      // TODO is this correct ?
+      loc: identifier.loc
+    };
 
     // TODO adjust the loc ?
     setExport.call(this, exports, identifier.name, temp);
@@ -148,15 +152,15 @@ function setExport(exports, name, value) {
 }
 
 
-function isUndefined(path, name) {
-  return path.scope.lookup(name) === null;
+function isUndefined(scope, name) {
+  return $util.lookup(scope, name) === null;
 }
 
 
-function isUndefinedIdentifier(path, node, name) {
+function isUndefinedIdentifier(scope, node, name) {
   return node.type === "Identifier" &&
          node.name === name &&
-         isUndefined(path, node.name);
+         isUndefined(scope, node.name);
 }
 
 
@@ -166,15 +170,15 @@ function isProperty(x, name) {
 }
 
 
-function replaceExport(path, exports, name) {
-  var scope = path.scope.lookup(name);
+function replaceExport(scope, exports, name) {
+  var scope = $util.lookup(scope, name);
 
   if ($util.hasKey(exports, name)) {
     var exported = exports[name];
 
     if (scope === null || scope.isGlobal) {
       // TODO adjust the source maps ?
-      path.replace(exported);
+      return exported;
 
     } else {
       this.error("Variable " + name + " is defined in a sub-scope");
@@ -183,6 +187,8 @@ function replaceExport(path, exports, name) {
   } else {
     this.error("Variable " + name + " is not exported");
   }
+
+  return null;
 }
 
 
@@ -192,6 +198,8 @@ module.exports = function (code, filePath) {
   var ast = $recast.parse(code, {
     sourceFileName: filePath
   });
+
+  var scope = $utils.attachScopes(ast, "scope");
 
   var imports = {};
   var exports = {};
@@ -222,10 +230,8 @@ module.exports = function (code, filePath) {
     }
   });
 
-  $recast.types.visit(ast, {
-    visitProgram: function (path) {
-      var node = path.node;
-
+  $walk.scope(ast, scope, function (parent, node, scope, traverse) {
+    if (node.type === "Program") {
       var body = [];
 
       node.body.forEach(function (x) {
@@ -237,7 +243,7 @@ module.exports = function (code, filePath) {
             // var foo = require("bar");
             if (x.init !== null &&
                 x.init.type === "CallExpression" &&
-                isUndefinedIdentifier(path, x.init.callee, "require") &&
+                isUndefinedIdentifier(scope, x.init.callee, "require") &&
                 x.id.type === "Identifier" &&
                 x.init.arguments.length === 1 &&
                 x.init.arguments[0].type === "Literal" &&
@@ -280,7 +286,7 @@ module.exports = function (code, filePath) {
                    x.expression.operator === "=" &&
                    x.expression.left.type === "MemberExpression") {
           // TODO handle module.exports.foo ?
-          if (isUndefinedIdentifier(path, x.expression.left.object, "exports")) {
+          if (isUndefinedIdentifier(scope, x.expression.left.object, "exports")) {
             // TODO what about computed expressions ?
             var identifier = toIdentifier.call(_this, x.expression.left.property);
 
@@ -290,14 +296,14 @@ module.exports = function (code, filePath) {
                 _this.warn("Export " + identifier.name + " is ignored");
               }
 
-              exportVar.call(_this, body, path, imports, exports, identifier, x.expression.right, x.loc);
+              exportVar.call(_this, body, scope, imports, exports, identifier, x.expression.right, x.loc);
 
             } else {
               body.push(x);
             }
 
           // module.exports = foo;
-          } else if (isUndefinedIdentifier(path, x.expression.left.object, "module") &&
+          } else if (isUndefinedIdentifier(scope, x.expression.left.object, "module") &&
                      isProperty(x.expression.left, "exports")) {
             moduleOverwritten = true;
 
@@ -316,7 +322,7 @@ module.exports = function (code, filePath) {
                 // foo: bar
                 if (identifier !== null) {
                   // TODO handle get/set different ?
-                  exportVar.call(_this, body, path, imports, exports, identifier, x.value, x.loc);
+                  exportVar.call(_this, body, scope, imports, exports, identifier, x.value, x.loc);
 
                 } else {
                   _this.warn("Invalid module export: " + $recast.print(x).code);
@@ -325,10 +331,12 @@ module.exports = function (code, filePath) {
             }
 
             // TODO guarantee that collisions cannot occur ?
-            var temp = path.scope.declareTemporary("__private_do_not_use_default__");
-
-            // TODO is this correct ?
-            temp.loc = x.expression.left.loc;
+            var temp = {
+              type: "Identifier",
+              name: $util.makeTemporary(scope, "default"),
+              // TODO is this correct ?
+              loc: x.expression.left.loc
+            };
 
             setExport.call(_this, exports, "default", temp);
 
@@ -363,14 +371,7 @@ module.exports = function (code, filePath) {
 
       node.body = body;
 
-      path.scope.scan(true);
-
-      this.traverse(path);
-    },
-
-    visitMemberExpression: function (path) {
-      var node = path.node;
-
+    } else if (node.type === "MemberExpression") {
       var identifier = stringToIdentifier.call(_this, node.property);
 
       // foo["bar"] = qux;
@@ -381,39 +382,35 @@ module.exports = function (code, filePath) {
       }
 
       // TODO handle module.exports.foo ?
-      if (isUndefinedIdentifier(path, node.object, "exports") &&
+      if (isUndefinedIdentifier(scope, node.object, "exports") &&
           // TODO is this correct ?
           !node.computed &&
           node.property.type === "Identifier" &&
           // TODO is this correct ?
           !moduleOverwritten) {
-        replaceExport.call(_this, path, exports, node.property.name);
+        node = replaceExport.call(_this, scope, exports, node.property.name);
 
-      } else if (isUndefinedIdentifier(path, node.object, "module") &&
+      } else if (isUndefinedIdentifier(scope, node.object, "module") &&
                  isProperty(node, "exports") &&
                  // TODO is this correct ?
                  moduleOverwritten) {
-        replaceExport.call(_this, path, exports, "default");
+        node = replaceExport.call(_this, scope, exports, "default");
       }
 
-      this.traverse(path);
-    },
-
-    visitIdentifier: function (path) {
-      var node = path.node;
-
-      if (warnOnDynamicRequire && isUndefinedIdentifier(path, node, "require")) {
+    } else if (node.type === "Identifier") {
+      if (warnOnDynamicRequire && isUndefinedIdentifier(scope, node, "require")) {
         _this.warn("Dynamic " + $recast.print(node).code);
 
-      } else if (warnOnDynamicExports && isUndefinedIdentifier(path, node, "exports")) {
+      } else if (warnOnDynamicExports && isUndefinedIdentifier(scope, node, "exports")) {
         _this.warn("Dynamic " + $recast.print(node).code);
 
-      } else if (warnOnDynamicModule && isUndefinedIdentifier(path, node, "module")) {
+      } else if (warnOnDynamicModule && isUndefinedIdentifier(scope, node, "module")) {
         _this.warn("Dynamic " + $recast.print(node).code);
       }
-
-      this.traverse(path);
     }
+
+    traverse(node);
+    return node;
   });
 
 

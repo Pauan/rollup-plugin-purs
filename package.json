@@ -9,6 +9,7 @@
     "convert-commonjs": "./bin/convert-commonjs.js"
   },
   "dependencies": {
+    "is-reference": "^1.0.0",
     "recast": "^0.11.18",
     "rollup-pluginutils": "^2.0.1"
   },

@@ -57,7 +57,7 @@ var weights = {
 function calculateWeight(node) {
   var weight = 0;
 
-  $walk.raw(node, function (node, traverse) {
+  $walk.raw(node, function (parent, node, traverse) {
     if (node.type === "Literal") {
       weight += ("" + node.value).length;
 
@@ -163,7 +163,8 @@ function makeInlined(id, top, scope) {
         name: id,
         params: top.params,
         body: top.body,
-        loc: top.loc
+        loc: top.loc,
+        expression: body[0].argument
       };
     }
   }
@@ -244,7 +245,8 @@ function lookupInlinedCall(top, scope) {
         type: "CallExpression",
         callee: {
           type: "FunctionExpression",
-          id: inlined.name,
+          // TODO is this needed ?
+          //id: inlined.name,
           params: inlined.params,
           body: inlined.body,
           // TODO is this correct ?
@@ -262,7 +264,7 @@ function lookupInlinedCall(top, scope) {
 
 
 function findInlineFunctions(ast, scope) {
-  return $walk.scope(ast, scope, function (node, scope, traverse) {
+  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
     if (node.type === "FunctionDeclaration") {
       // TODO is this scope correct ?
       makeInlined(node.id, node, scope.parent);
@@ -310,7 +312,7 @@ function inlineFunctionCalls(ast, scope) {
   // TODO is this correct ?
   var recursive = false;
 
-  return $walk.scope(ast, scope, function (node, scope, traverse) {
+  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
     // TODO code duplication
     if (node.type === "FunctionDeclaration") {
       return pushInline(node.id, scope, stack, traverse, node);

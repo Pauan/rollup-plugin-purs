@@ -18,6 +18,7 @@ exports.matches = function (string, re) {
   }
 };
 
+
 // TODO make this a pull request for https://github.com/rollup/rollup-pluginutils
 exports.lookup = function (scope, name) {
   for (;;) {
@@ -33,12 +34,13 @@ exports.lookup = function (scope, name) {
   }
 };
 
+
 var tempIndex = 0;
 
 // TODO make this a pull request for https://github.com/rollup/rollup-pluginutils
 exports.makeTemporary = function (scope, name) {
   for (;;) {
-    var mangled = name + "__temp" + (++tempIndex) + "__";
+    var mangled = name + "_" + (++tempIndex);
 
     if (!scope.declarations[mangled]) {
       scope.declarations[mangled] = true;

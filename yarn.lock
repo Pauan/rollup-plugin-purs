@@ -143,6 +143,10 @@ is-primitive@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/is-primitive/-/is-primitive-2.0.0.tgz#207bab91638499c07b2adf240a41a87210034575"
 
+is-reference@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/is-reference/-/is-reference-1.0.0.tgz#e9f80e87b4633c99cb5d7de5ce57871ab06f810d"
+
 isarray@1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/isarray/-/isarray-1.0.0.tgz#bb935d48582cba168c06834957a54a3e07124f11"

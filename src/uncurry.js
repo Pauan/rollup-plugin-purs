@@ -26,7 +26,7 @@ function makeUncurried(scope, id, top, body) {
       // TODO guarantee that collisions cannot occur ?
       var temp = {
         type: "Identifier",
-        name: $util.makeTemporary(scope, id.name + "__uncurried"),
+        name: $util.makeTemporary(scope, id.name + "_uncurried"),
         // TODO is this correct ?
         loc: id.loc
       };
@@ -138,7 +138,7 @@ function isArgumentsSaturated(expected, actual) {
 
 
 function findUncurried(ast, scope) {
-  return $walk.scope(ast, scope, function (node, scope, traverse) {
+  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
     if (node.type === "Program" || node.type === "BlockStatement") {
       var body = [];
 
@@ -168,7 +168,7 @@ function findUncurried(ast, scope) {
 
 
 function uncurryCalls(ast, scope) {
-  return $walk.scope(ast, scope, function (node, scope, traverse) {
+  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
     var uncurried = getCurriedCall(node, scope);
 
     if (uncurried !== null) {

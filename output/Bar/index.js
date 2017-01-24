@@ -10,6 +10,10 @@ exports.hasOwnProperty = "hi!";
 exports.null = 10;
 //exports.main = main;
 
+var log = 50;
+
+console.log(log);
+
 console.log(exports.null);
 
 function curriedFn1(a) {
@@ -81,7 +85,13 @@ function main() {
   (function () {
     //var innerCurried = 10;
     console.log(innerCurried(1)(2)(3));
+  })();
+
+  (function (innerCurried) {
     console.log(innerCurriedVar(1)(2)(3));
+  })();
+
+  (function (innerCurried, innerCurriedVar) {
     console.log(innerCurriedVar2(1)(2)(3));
   })();
 
