@@ -71,8 +71,13 @@ function main() {
   var propagated = (10 + 50, 20, 30);
   var notPropagated = (delete a.bar, 50);
 
+  var assigned = 0;
+
+  assigned = 10;
+
   console.log(propagated);
   console.log(notPropagated);
+  console.log(assigned);
 
   function innerCurried2(a) {
     return function (b) {

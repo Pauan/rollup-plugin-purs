@@ -114,6 +114,37 @@ function isSimple(x) {
 }
 
 
+// TODO is this all of the assignment expressions ?
+function findAssignments(ast, scope) {
+  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
+    var identifier = null;
+
+    if (node.type === "AssignmentExpression") {
+      identifier = node.left;
+
+    } else if (node.type === "UpdateExpression") {
+      identifier = node.argument;
+    }
+
+    if (identifier !== null && identifier.type === "Identifier") {
+      var def = $util.lookup(scope, identifier.name);
+
+      // TODO is this correct ?
+      if (def !== null) {
+        if (def.assigned == null) {
+          def.assigned = {};
+        }
+
+        def.assigned[identifier.name] = true;
+      }
+    }
+
+    traverse(node);
+    return node;
+  });
+}
+
+
 function findReferences(ast, scope) {
   return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
     if (node.type === "VariableDeclaration") {
@@ -127,7 +158,10 @@ function findReferences(ast, scope) {
           if (replace !== null &&
               // Don't propagate it if the new name is the same as the old name
               !(replace.type === "Identifier" &&
-                replace.name === x.id.name)) {
+                replace.name === x.id.name) &&
+              (scope.assigned == null ||
+               !scope.assigned[x.id.name])) {
+
             if (scope.propagating == null) {
               scope.propagating = {};
             }
@@ -207,5 +241,5 @@ function replaceReferences(ast, scope) {
 
 
 module.exports = function (ast, scope) {
-  return replaceReferences.call(this, findReferences.call(this, ast, scope), scope);
+  return replaceReferences.call(this, findReferences.call(this, findAssignments(ast, scope), scope), scope);
 };
