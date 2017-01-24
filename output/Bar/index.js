@@ -52,6 +52,10 @@ exports.curried = function (a) {
 
 var curriedFnVar = exports.curried;
 
+var recursivePropagation = recursivePropagation;
+
+console.log(recursivePropagation);
+
 function main() {
   function innerCurried(a) {
     return function (b) {
@@ -89,6 +93,11 @@ function main() {
 
   (function (innerCurried) {
     console.log(innerCurriedVar(1)(2)(3));
+  })();
+
+  (function (innerCurried) {
+    var innerCurriedVar2 = innerCurriedVar;
+    console.log(innerCurriedVar2(1)(2)(3));
   })();
 
   (function (innerCurried, innerCurriedVar) {

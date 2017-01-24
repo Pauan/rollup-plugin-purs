@@ -7,6 +7,7 @@ var $convert = require("./src/convert");
 var $uncurry = require("./src/uncurry");
 var $inline = require("./src/inline");
 var $rename = require("./src/rename");
+var $propagate = require("./src/propagate");
 
 
 function pursPath(options, path) {
@@ -113,6 +114,8 @@ module.exports = function (options) {
       var scope = $utils.attachScopes(ast, "scope");
 
       ast = $rename.call(this, ast, scope);
+
+      ast = $propagate.call(this, ast, scope);
 
       if (options.uncurry) {
         ast = $uncurry.call(this, ast, scope);
