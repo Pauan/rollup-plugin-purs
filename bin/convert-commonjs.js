@@ -11,6 +11,9 @@ var filename = args[0];
 var context = {
   warn: function (code) {
     console.warn("Warning: " + code);
+  },
+  error: function (code) {
+    throw new Error(code);
   }
 };
 
