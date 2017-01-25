@@ -1,0 +1,8 @@
+{
+    "name": "rollup-plugin-purs",
+    "set": "psc-0.10.5",
+    "source": "https://github.com/purescript/package-sets.git",
+    "depends": [
+        "prelude"
+    ]
+}

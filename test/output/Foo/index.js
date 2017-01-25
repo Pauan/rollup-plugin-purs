@@ -45,6 +45,10 @@ function inlined4(a, b, c) {
 var inlined5 = inlined1;
 var inlined6 = inlined5;
 
+function inlined7(a, b, c) {
+  return (a = 10), (self = b);
+}
+
 function recursive(a, b, c) {
   return recursive(a + 1, b + 1, c + 1);
 }
@@ -65,6 +69,7 @@ console.log(inlined3(a, 2, 3));
 console.log(inlined4(a, 2, 3));
 console.log(inlined5(a, 2, 3));
 console.log(inlined6(a, 2, 3));
+console.log(inlined7(a, 2, 3));
 console.log((function (a) { return inlined1(a, 2, 3); })(1));
 console.log(inlined2(1, 2, 3));
 console.log(recursive(1, 2, 3));
