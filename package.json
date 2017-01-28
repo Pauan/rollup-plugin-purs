@@ -16,9 +16,11 @@
   },
   "devDependencies": {
     "rollup": "^0.41.1",
-    "rollup-plugin-node-resolve": "^2.0.0"
+    "rollup-plugin-node-resolve": "^2.0.0",
+    "uglify-js": "^2.7.5"
   },
   "scripts": {
-    "test": "cd test && rollup --config"
+    "test": "cd test && rollup --config && cd .. && yarn run uglify",
+    "uglify": "uglifyjs test/bundle.js --output test/bundle.min.js --screw-ie8 --compress --beautify"
   }
 }

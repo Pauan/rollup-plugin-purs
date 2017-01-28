@@ -4,7 +4,7 @@ var resolve = require("rollup-plugin-node-resolve");
 export default {
   entry: "Main.purs",
   dest: "bundle.js",
-  format: "es",
+  format: "iife",
   sourceMap: true,
   treeshake: true,
   plugins: [

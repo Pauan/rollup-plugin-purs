@@ -59,6 +59,25 @@ console.log(recursivePropagation);
 console.log(recursivePropagation2);
 
 function main() {
+  function recursiveCurry(a) {
+    return function (b) {
+      return function (c) {
+        return a + b + c + recursiveCurry(a)(b)(c);
+      };
+    };
+  }
+
+  function recursiveCurry2(a) {
+    return function (b) {
+      return function (c) {
+        return a + b + c + recursiveCurry2(a)(b);
+      };
+    };
+  }
+
+  console.log(recursiveCurry(1)(2)(3));
+  console.log(recursiveCurry2(1)(2)(3));
+
   function innerCurried(a) {
     return function (b) {
       return function (c) {

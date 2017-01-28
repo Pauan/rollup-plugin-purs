@@ -118,15 +118,8 @@ module.exports = function (options) {
         return {
           visitor: {
             ReferencedIdentifier: {
-              enter: function (path) {
-                console.log(path.node.name);
-
-                if (path.node.name !== "foo") {
-                  path.replaceWith({
-                    type: "Identifier",
-                    name: "foo"
-                  });
-                }
+              exit: function (path) {
+                console.log(path.node.name, "1");
               }
             }
           }
@@ -140,6 +133,8 @@ module.exports = function (options) {
       /*if (options.inline) {
         plugins.push($inline);
       }*/
+
+      //plugins.push($deadCode);
 
       // TODO what about sourceRoot ?
       return $babel.transform(code, {

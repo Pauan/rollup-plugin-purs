@@ -100,46 +100,42 @@ module.exports = function (babel) {
 
         // Don't replace it if the variable is mutated
         if (binding != null && binding.constant) {
-          var declaration = binding.path.node;
+          if (binding.rollup_plugin_purs_propagated == null) {
+            binding.rollup_plugin_purs_propagated = false;
 
-          if (declaration.type === "VariableDeclarator" &&
-              declaration.id.type === "Identifier" &&
-              // TODO is this check necessary ?
-              declaration.id.name === node.name &&
-              // TODO propagate undefined variables ?
-              declaration.init != null) {
+            var declaration = binding.path.node;
 
-            var replace = isSimple(declaration.init);
+            if (declaration.type === "VariableDeclarator" &&
+                declaration.id.type === "Identifier" &&
+                // TODO is this check necessary ?
+                declaration.id.name === node.name &&
+                // TODO propagate undefined variables ?
+                declaration.init != null) {
 
-            if (replace !== null &&
-                // Don't replace it if the new name is the same as the old name
-                !(replace.type === "Identifier" &&
-                  replace.name === declaration.id.name)) {
+              var simple = isSimple(declaration.init);
 
-              // Don't replace it if the new identifier is shadowed
-              if (replace.type === "Identifier" &&
-                  // TODO better check for this ?
-                  path.scope.getBinding(replace.name) !== binding.scope.getBinding(replace.name)) {
-                // TODO loc
-                // TODO replace with _this.warn (https://github.com/rollup/rollup/issues/1282)
-                console.warn("Could not replace " + node.name + " with " + replace.name);
-
-              } else {
-                // TODO is this correct ?
-                if (replace.type === "Identifier") {
-                  path.scope.getBinding(replace.name).reference(path);
-                }
-
-                binding.dereference();
-
-                if (!binding.referenced) {
-                  // TODO is this correct ?
-                  binding.scope.removeOwnBinding(declaration.id.name);
-                  binding.path.remove();
-                }
-
-                path.replaceWith(replace);
+              if (simple !== null &&
+                  // Don't replace it if the new name is the same as the old name
+                  !(simple.type === "Identifier" &&
+                    simple.name === declaration.id.name)) {
+                binding.rollup_plugin_purs_propagated = simple;
               }
+            }
+          }
+
+          var replace = binding.rollup_plugin_purs_propagated;
+
+          if (replace !== false) {
+            // Don't replace it if the new identifier is shadowed
+            if (replace.type === "Identifier" &&
+                // TODO better check for this ?
+                path.scope.getBinding(replace.name) !== binding.scope.getBinding(replace.name)) {
+              // TODO loc
+              // TODO replace with _this.warn (https://github.com/rollup/rollup/issues/1282)
+              console.warn("Could not replace " + node.name + " with " + replace.name);
+
+            } else {
+              path.replaceWith(replace);
             }
           }
         }

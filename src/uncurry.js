@@ -1,10 +1,11 @@
 "use strict";
 
 
-// TODO if the function can't be decurried, don't check multiple times
 function makeUncurried(binding, id, top) {
   // TODO use a Symbol ?
   if (binding.rollup_plugin_purs_uncurried == null) {
+    binding.rollup_plugin_purs_uncurried = false;
+
     // Only decurry 1-argument functions
     if (top.params.length === 1) {
       var params = [top.params];
@@ -35,7 +36,6 @@ function makeUncurried(binding, id, top) {
         binding.rollup_plugin_purs_uncurried = {
           id: id,
           uid: temp,
-          binding: binding,
           params: params,
         };
 
@@ -81,17 +81,16 @@ function makeUncurried(binding, id, top) {
             loc: top.loc
           });
         }
-
-        // TODO use a Symbol ?
-        return binding.rollup_plugin_purs_uncurried;
       }
     }
+  }
 
-    return null;
-
-  } else {
+  if (binding.rollup_plugin_purs_uncurried !== false) {
     // TODO use a Symbol ?
     return binding.rollup_plugin_purs_uncurried;
+
+  } else {
+    return null;
   }
 }
 
@@ -159,17 +158,6 @@ module.exports = function (babel) {
             args.reverse();
 
             if (isArgumentsSaturated(uncurried.params, args)) {
-              var binding = uncurried.binding;
-
-              // TODO code duplication
-              binding.dereference();
-
-              if (!binding.referenced) {
-                // TODO is this correct ?
-                binding.scope.removeOwnBinding(uncurried.id.name);
-                binding.path.remove();
-              }
-
               path.replaceWith({
                 type: "CallExpression",
                 callee: uncurried.uid,
