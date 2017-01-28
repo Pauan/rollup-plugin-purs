@@ -117,6 +117,11 @@ function main() {
     console.log(innerCurriedVar2(1)(2)(3));
   })();
 
+  (function () {
+    var innerCurriedVar2 = innerCurriedVar;
+    console.log(innerCurriedVar2(1)(2)(3));
+  })();
+
   (function (innerCurried, innerCurriedVar) {
     console.log(innerCurriedVar2(1)(2)(3));
   })();

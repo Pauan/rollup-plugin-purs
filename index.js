@@ -110,29 +110,34 @@ module.exports = function (options) {
     transformBundle: function (code) {
       var plugins = [];
 
+      plugins.push($rename);
+
       plugins.push($propagate);
 
       /*plugins.push(function (babel) {
         return {
           visitor: {
-            ReferencedIdentifier: function (path) {
-              var binding = path.scope.getBinding("propagated");
+            ReferencedIdentifier: {
+              enter: function (path) {
+                console.log(path.node.name);
 
-              console.log("propagated", binding != null);
-
-              if (binding != null) {
-
+                if (path.node.name !== "foo") {
+                  path.replaceWith({
+                    type: "Identifier",
+                    name: "foo"
+                  });
+                }
               }
             }
           }
         };
       });*/
 
-      /*if (options.uncurry) {
+      if (options.uncurry) {
         plugins.push($uncurry);
       }
 
-      if (options.inline) {
+      /*if (options.inline) {
         plugins.push($inline);
       }*/
 

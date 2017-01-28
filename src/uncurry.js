@@ -1,53 +1,45 @@
 "use strict";
 
-var $walk = require("./walk");
-var $util = require("./util");
 
+// TODO if the function can't be decurried, don't check multiple times
+function makeUncurried(binding, id, top) {
+  // TODO use a Symbol ?
+  if (binding.rollup_plugin_purs_uncurried == null) {
+    // Only decurry 1-argument functions
+    if (top.params.length === 1) {
+      var params = [top.params];
 
-function makeUncurried(scope, id, top, body) {
-  // Only decurry 1-argument functions
-  if (top.params.length === 1) {
-    var params = [top.params];
+      var x = top;
 
-    var x = top;
-
-    while (x.body.body.length === 1 &&
-           x.body.body[0].type === "ReturnStatement" &&
-           x.body.body[0].argument !== null &&
-           x.body.body[0].argument.type === "FunctionExpression" &&
-           // Only decurry 1-argument functions
-           x.body.body[0].argument.params.length === 1) {
-      x = x.body.body[0].argument;
-      params.push(x.params);
-    }
-
-    if (x !== top) {
-      // TODO better flatten function ?
-      var flattened = [].concat.apply([], params);
-
-      // TODO guarantee that collisions cannot occur ?
-      var temp = {
-        type: "Identifier",
-        name: $util.makeTemporary(scope, id.name + "_uncurried"),
-        // TODO is this correct ?
-        loc: id.loc
-      };
-
-      // TODO hacky
-      // TODO use $util.lookup ?
-      if (scope.curried == null) {
-        scope.curried = {};
+      while (x.body.body.length === 1 &&
+             x.body.body[0].type === "ReturnStatement" &&
+             x.body.body[0].argument !== null &&
+             x.body.body[0].argument.type === "FunctionExpression" &&
+             // Only decurry 1-argument functions
+             x.body.body[0].argument.params.length === 1) {
+        x = x.body.body[0].argument;
+        params.push(x.params);
       }
 
-      scope.curried[id.name] = {
-        params: params,
-        identifier: temp
-      };
+      if (x !== top) {
+        // TODO better flatten function ?
+        var flattened = [].concat.apply([], params);
 
-      body.push({
-        type: "VariableDeclaration",
-        kind: "var",
-        declarations: [{
+        // TODO guarantee that collisions cannot occur ?
+        var temp = binding.scope.generateUidIdentifier(id.name + "_uncurried");
+
+        // TODO is this correct ?
+        temp.loc = id.loc;
+
+        // TODO use a Symbol ?
+        binding.rollup_plugin_purs_uncurried = {
+          id: id,
+          uid: temp,
+          binding: binding,
+          params: params,
+        };
+
+        var body = {
           type: "VariableDeclarator",
           id: temp,
           init: {
@@ -56,63 +48,70 @@ function makeUncurried(scope, id, top, body) {
             params: flattened,
             body: x.body,
             loc: top.loc
-          },
-          loc: top.loc
-        }],
-        loc: top.loc
-      });
+          }
+        };
 
-      x.body = {
-        type: "BlockStatement",
-        body: [{
-          type: "ReturnStatement",
-          argument: {
-            type: "CallExpression",
-            callee: temp,
-            arguments: flattened,
+        x.body = {
+          type: "BlockStatement",
+          body: [{
+            type: "ReturnStatement",
+            argument: {
+              type: "CallExpression",
+              callee: temp,
+              arguments: flattened,
+              // TODO is this loc correct ?
+              loc: x.body.loc
+            },
             // TODO is this loc correct ?
             loc: x.body.loc
-          },
+          }],
           // TODO is this loc correct ?
           loc: x.body.loc
-        }],
-        // TODO is this loc correct ?
-        loc: x.body.loc
-      };
+        };
+
+        // TODO hacky
+        if (binding.path.node.type === "VariableDeclarator") {
+          binding.path.insertBefore(body);
+
+        } else {
+          binding.path.insertBefore({
+            type: "VariableDeclaration",
+            kind: "var",
+            declarations: [body],
+            loc: top.loc
+          });
+        }
+
+        // TODO use a Symbol ?
+        return binding.rollup_plugin_purs_uncurried;
+      }
     }
+
+    return null;
+
+  } else {
+    // TODO use a Symbol ?
+    return binding.rollup_plugin_purs_uncurried;
   }
 }
 
 
-function getCurriedCall(top, scope) {
-  var args = [];
+function getUncurriedCall(path, node) {
+  if (node.type === "Identifier") {
+    var binding = path.scope.getBinding(node.name);
 
-  var x = top;
+    // binding.rollup_plugin_purs_uncurried
+    if (binding != null) {
+      var definition = binding.path.node;
 
-  while (x.type === "CallExpression") {
-    args.push(x.arguments);
-    x = x.callee;
-  }
+      if (definition.type === "FunctionDeclaration") {
+        return makeUncurried(binding, definition.id, definition);
 
-  args.reverse();
-
-  if (x.type === "Identifier") {
-    var def = $util.lookup(scope, x.name);
-
-    if (def != null &&
-        def.curried != null &&
-        $util.hasKey(def.curried, x.name)) {
-      var curried = def.curried[x.name];
-
-      if (isArgumentsSaturated(curried.params, args)) {
-        return {
-          type: "CallExpression",
-          callee: curried.identifier,
-          // TODO better flatten function
-          arguments: [].concat.apply([], args),
-          // TODO is this loc correct ?
-          loc: top.loc
-        };
+      } else if (definition.type === "VariableDeclarator" &&
+                 definition.id.type === "Identifier" &&
+                 definition.init != null &&
+                 definition.init.type === "FunctionExpression") {
+        return makeUncurried(binding, definition.id, definition.init);
       }
     }
   }
@@ -139,51 +138,50 @@ function isArgumentsSaturated(expected, actual) {
 }
 
 
-function findUncurried(ast, scope) {
-  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
-    if (node.type === "Program" || node.type === "BlockStatement") {
-      var body = [];
+module.exports = function (babel) {
+  return {
+    visitor: {
+      CallExpression: {
+        // TODO a little hacky that it uses exit
+        exit: function (path) {
+          var node = path.node;
 
-      node.body.forEach(function (x) {
-        if (x.type === "FunctionDeclaration") {
-          makeUncurried(scope, x.id, x, body);
+          var args = [];
 
-        } else if (x.type === "VariableDeclaration") {
-          x.declarations.forEach(function (x) {
-            if (x.init !== null && x.init.type === "FunctionExpression") {
-              makeUncurried(scope, x.id, x.init, body);
+          while (node.type === "CallExpression") {
+            args.push(node.arguments);
+            node = node.callee;
+          }
+
+          var uncurried = getUncurriedCall(path, node);
+
+          if (uncurried != null) {
+            args.reverse();
+
+            if (isArgumentsSaturated(uncurried.params, args)) {
+              var binding = uncurried.binding;
+
+              // TODO code duplication
+              binding.dereference();
+
+              if (!binding.referenced) {
+                // TODO is this correct ?
+                binding.scope.removeOwnBinding(uncurried.id.name);
+                binding.path.remove();
+              }
+
+              path.replaceWith({
+                type: "CallExpression",
+                callee: uncurried.uid,
+                // TODO better flatten function
+                arguments: [].concat.apply([], args),
+                // TODO is this loc correct ?
+                loc: path.node.loc
+              });
             }
-          });
+          }
         }
-
-        body.push(x);
-      });
-
-      node.body = body;
+      }
     }
-
-    traverse(node);
-
-    return node;
-  });
-}
-
-
-function uncurryCalls(ast, scope) {
-  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
-    var uncurried = getCurriedCall(node, scope);
-
-    if (uncurried !== null) {
-      node = uncurried;
-    }
-
-    traverse(node);
-
-    return node;
-  });
-}
-
-
-module.exports = function (ast, scope) {
-  return uncurryCalls(findUncurried(ast, scope), scope);
+  };
 };
