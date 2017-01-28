@@ -53,8 +53,10 @@ exports.curried = function (a) {
 var curriedFnVar = exports.curried;
 
 var recursivePropagation = recursivePropagation;
+var recursivePropagation2 = (1, recursivePropagation2);
 
 console.log(recursivePropagation);
+console.log(recursivePropagation2);
 
 function main() {
   function innerCurried(a) {
@@ -68,14 +70,18 @@ function main() {
   var innerCurriedVar = innerCurried;
   var innerCurriedVar2 = innerCurriedVar;
 
-  var propagated = (10 + 50, 20, 30);
+  var propagatedPre = (delete a.bar),
+      propagated = (10 + 50, 20, 30),
+      propagatedPost = (delete a.bar);
   var notPropagated = (delete a.bar, 50);
 
   var assigned = 0;
 
   assigned = 10;
 
+  console.log(propagatedPre);
   console.log(propagated);
+  console.log(propagatedPost);
   console.log(notPropagated);
   console.log(assigned);
 

@@ -1,3 +1,5 @@
+"use strict";
+
 var $babel = require("babel-core");
 var $util = require("./util");
 

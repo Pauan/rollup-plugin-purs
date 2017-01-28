@@ -1,64 +1,54 @@
-var $walk = require("./walk");
-var $util = require("./util");
-var $isReference = require("is-reference");
+"use strict";
 
 
-// TODO maybe use walk instead ?
-/*function isPure(x) {
-  return (x === null) ||
-         (x.type === "Program" && x.body.body(isPure)) ||
-         (x.type === "EmptyStatement") ||
-         (x.type === "BlockStatement" && x.body.every(isPure)) ||
-         (x.type === "ExpressionStatement" && isPure(x.expression)) ||
-         (x.type === "IfStatement" && isPure(x.test) && isPure(x.consequent) && isPure(x.alternate)) ||
-         (x.type === "LabeledStatement" && isPure(x.body)) ||
-         // TODO should this be considered pure ?
-         (x.type === "BreakStatement") ||
-         // TODO should this be considered pure ?
-         (x.type === "ContinueStatement") ||
-         // TODO should this be considered pure ?
-         (x.type === "WithStatement" && isPure(x.object) && isPure(x.body)) ||
-         (x.type === "SwitchStatement" && isPure(x.discriminant) && x.cases.every(isPure)) ||
-         // TODO should this be considered pure ?
-         (x.type === "ReturnStatement" && isPure(x.argument)) ||
-         // TODO should this be considered pure ?
-         (x.type === "ThrowStatement" && isPure(x.argument)) ||
-         // TODO what about non-standard extensions ?
-         (x.type === "TryStatement" && isPure(x.block) && isPure(x.handler) && isPure(x.finalizer)) ||
-         // TODO what about non-standard extensions ?
-         // TODO what about patterns ?
-         (x.type === "CatchClause" && isPure(x.body)) ||
-         (x.type === "WhileStatement" &&
-         ;
-}*/
-
-
-// TODO what about MemberExpression ?
-// TODO DoExpression
-// TODO BindExpression
-// TODO MetaProperty
 // TODO DirectiveLiteral
-// TODO SpreadProperty
-// TODO GeneratorExpression
-// TODO ComprehensionExpression
-// TODO TaggedTemplateExpression
 // TODO TemplateLiteral
-// TODO what about AwaitExpression ?
-// TODO TypeCastExpression
-// TODO JSXMemberExpression
-// TODO JSXExpressionContainer
-// TODO JSXElement
-// TODO JSXEmptyExpression
-// TODO JSXText
-// TODO check for other expressions
+function isLiteral(x) {
+  return (x.type === "RegExpLiteral") ||
+         (x.type === "NullLiteral") ||
+         (x.type === "StringLiteral") ||
+         (x.type === "BooleanLiteral") ||
+         (x.type === "NumericLiteral");
+}
+
+
+// https://github.com/babel/babylon/blob/master/ast/spec.md
+// TODO Decorator
+// TODO Directive
+// TODO DirectiveLiteral
+// TODO Import
+// TODO BindExpression ?
+// TODO CallExpression with IIFE ?
+// TODO NewExpression with IIFE ?
+// TODO TemplateLiteral
+// TODO TaggedTemplateExpression
+// TODO TemplateElement
+// TODO ClassBody
+// TODO ClassMethod
+// TODO ClassProperty
+// TODO ClassDeclaration
+// TODO ClassExpression
+// TODO MetaProperty
 function isPureExpression(x) {
   return (x === null) ||
-         (x.type === "FunctionExpression") ||
+         (x.type === "RegExpLiteral") || // TODO are regexps pure...?
+         (x.type === "NullLiteral") ||
+         (x.type === "StringLiteral") ||
+         (x.type === "BooleanLiteral") ||
+         (x.type === "NumericLiteral") ||
+         // TODO is this pure ?
+         (x.type === "Super") ||
          (x.type === "ThisExpression") ||
+         (x.type === "ArrowFunctionExpression") ||
          (x.type === "ArrayExpression" && x.elements.every(isPureExpression)) ||
          (x.type === "ObjectExpression" && x.properties.every(isPureExpression)) ||
-         (x.type === "Property" && isPureExpression(x.key) && isPureExpression(x.value)) ||
-         (x.type === "SequenceExpression" && x.expressions.every(isPureExpression)) ||
+         // TODO is this correct ?
+         (x.type === "ObjectProperty" && isPureExpression(x.key) && isPureExpression(x.value)) ||
+         // TODO is this correct ?
+         (x.type === "ObjectMethod" && isPureExpression(x.key) && isPureExpression(x.value)) ||
+         // TODO is this pure ?
+         (x.type === "SpreadProperty" && isPureExpression(x.argument)) ||
+         (x.type === "FunctionExpression") ||
          (x.type === "UnaryExpression" && x.operator !== "delete" && isPureExpression(x.argument)) ||
          (x.type === "BinaryExpression" && isPureExpression(x.left) && isPureExpression(x.right)) ||
          (x.type === "LogicalExpression" && isPureExpression(x.left) && isPureExpression(x.right)) ||
@@ -66,28 +56,14 @@ function isPureExpression(x) {
           isPureExpression(x.test) &&
           isPureExpression(x.consequent) &&
           isPureExpression(x.alternate)) ||
-         (x.type === "Identifier") ||
-         (x.type === "Literal") ||
-         // TODO is this an expression ?
-         (x.type === "Noop") ||
-         // TODO is this correct ?
-         (x.type === "Super") ||
-         (x.type === "ParenthesizedExpression" && isPureExpression(x.expression)) ||
-         (x.type === "ObjectMethod") ||
-         // TODO is this correct ?
-         (x.type === "ObjectProperty" && isPureExpression(x.key) && isPureExpression(x.value)) ||
-         (x.type === "ArrowFunctionExpression") ||
-         (x.type === "SpreadElement" && isPureExpression(x.argument)) ||
-         (x.type === "ClassExpression" && isPureExpression(x.superClass) && x.implements.every(isPureExpression)) ||
-         (x.type === "ClassImplements" && isPureExpression(x.superClass)) ||
-         (x.type === "SpreadProperty" && isPureExpression(x.argument));
+         (x.type === "SequenceExpression" && x.expressions.every(isPureExpression));
 }
 
 
 function isSimple(x) {
   if (x.type === "Identifier" ||
       // TODO What about regexps ?
-      x.type === "Literal") {
+      isLiteral(x)) {
     return x;
 
   } else if (x.type === "SequenceExpression") {
@@ -114,132 +90,55 @@ function isSimple(x) {
 }
 
 
-// TODO is this all of the assignment expressions ?
-function findAssignments(ast, scope) {
-  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
-    var identifier = null;
+module.exports = function (babel) {
+  return {
+    visitor: {
+      ReferencedIdentifier: function (path) {
+        var node = path.node;
 
-    if (node.type === "AssignmentExpression") {
-      identifier = node.left;
+        var binding = path.scope.getBinding(node.name);
 
-    } else if (node.type === "UpdateExpression") {
-      identifier = node.argument;
-    }
+        // Don't replace it if the variable is mutated
+        if (binding != null && binding.constant) {
+          var declaration = binding.path.node;
 
-    if (identifier !== null && identifier.type === "Identifier") {
-      var def = $util.lookup(scope, identifier.name);
+          if (declaration.type === "VariableDeclarator" &&
+              declaration.id.type === "Identifier" &&
+              // TODO is this check necessary ?
+              declaration.id.name === node.name &&
+              // TODO propagate undefined variables ?
+              declaration.init != null) {
 
-      // TODO is this correct ?
-      if (def !== null) {
-        if (def.assigned == null) {
-          def.assigned = {};
-        }
+            var replace = isSimple(declaration.init);
 
-        def.assigned[identifier.name] = true;
-      }
-    }
+            if (replace !== null &&
+                // Don't replace it if the new name is the same as the old name
+                !(replace.type === "Identifier" &&
+                  replace.name === declaration.id.name)) {
 
-    traverse(node);
-    return node;
-  });
-}
+              // Don't replace it if the new identifier is shadowed
+              if (replace.type === "Identifier" &&
+                  // TODO better check for this ?
+                  path.scope.getBinding(replace.name) !== binding.scope.getBinding(replace.name)) {
+                // TODO loc
+                // TODO replace with _this.warn (https://github.com/rollup/rollup/issues/1282)
+                console.warn("Could not replace " + node.name + " with " + replace.name);
 
+              } else {
+                binding.dereference();
 
-function findReferences(ast, scope) {
-  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
-    if (node.type === "VariableDeclaration") {
-      var declarations = [];
+                if (!binding.referenced) {
+                  // TODO is this correct ?
+                  binding.scope.removeOwnBinding(declaration.id.name);
+                  binding.path.remove();
+                }
 
-      node.declarations.forEach(function (x) {
-        if (x.id.type === "Identifier" &&
-            x.init !== null) {
-          var replace = isSimple(x.init);
-
-          if (replace !== null &&
-              // Don't propagate it if the new name is the same as the old name
-              !(replace.type === "Identifier" &&
-                replace.name === x.id.name) &&
-              (scope.assigned == null ||
-               !scope.assigned[x.id.name])) {
-
-            if (scope.propagating == null) {
-              scope.propagating = {};
+                path.replaceWith(replace);
+              }
             }
-
-            scope.propagating[x.id.name] = replace;
-
-          } else {
-            declarations.push(x);
           }
-
-        } else {
-          declarations.push(x);
         }
-      });
-
-      if (declarations.length === 0) {
-        return {
-          type: "EmptyStatement",
-          loc: node.loc
-        };
-
-      } else {
-        node.declarations = declarations;
       }
     }
-
-    traverse(node);
-    return node;
-  });
-}
-
-
-function replaceReferences(ast, scope) {
-  var _this = this;
-
-  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
-    var newNode = node;
-
-    var originalScope = null;
-
-    for (;;) {
-      // TODO is the $isReference needed ?
-      if (newNode.type === "Identifier" && $isReference(newNode, parent)) {
-        var def = $util.lookup(scope, newNode.name);
-
-        if (def != null &&
-            def.propagating != null &&
-            $util.hasKey(def.propagating, newNode.name)) {
-          originalScope = def;
-          newNode = def.propagating[newNode.name];
-
-        } else {
-          break;
-        }
-
-      } else {
-        break;
-      }
-    }
-
-    // TODO does this need to use $isReference ?
-    if (newNode !== node &&
-        newNode.type === "Identifier" &&
-        // TODO is this correct ?
-        originalScope !== $util.lookup(scope, newNode.name)) {
-      // TODO loc
-      // TODO replace with _this.warn (https://github.com/rollup/rollup/issues/1282)
-      console.warn("Could not replace " + node.name + " with " + newNode.name);
-
-      newNode = node;
-    }
-
-    traverse(newNode);
-    return newNode;
-  });
-}
-
-
-module.exports = function (ast, scope) {
-  return replaceReferences.call(this, findReferences.call(this, findAssignments(ast, scope), scope), scope);
+  };
 };

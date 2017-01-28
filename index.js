@@ -1,4 +1,6 @@
-var $recast = require("recast");
+"use strict";
+
+var $babel = require("babel-core");
 var $utils = require("rollup-pluginutils");
 var $path = require("path");
 var $fs = require("fs");
@@ -106,33 +108,43 @@ module.exports = function (options) {
     },
 
     transformBundle: function (code) {
-      var ast = $recast.parse(code, {
-        // TODO is this correct ?
-        sourceFileName: "\0rollup-plugin-purs:bundle"
-      });
+      var plugins = [];
 
-      var scope = $utils.attachScopes(ast, "scope");
+      plugins.push($propagate);
 
-      ast = $rename.call(this, ast, scope);
+      /*plugins.push(function (babel) {
+        return {
+          visitor: {
+            ReferencedIdentifier: function (path) {
+              var binding = path.scope.getBinding("propagated");
 
-      ast = $propagate.call(this, ast, scope);
+              console.log("propagated", binding != null);
 
-      if (options.uncurry) {
-        ast = $uncurry.call(this, ast, scope);
+              if (binding != null) {
+
+              }
+            }
+          }
+        };
+      });*/
+
+      /*if (options.uncurry) {
+        plugins.push($uncurry);
       }
 
       if (options.inline) {
-        ast = $inline.call(this, ast, scope);
-      }
+        plugins.push($inline);
+      }*/
 
-      var out = $recast.print(ast, {
+      // TODO what about sourceRoot ?
+      return $babel.transform(code, {
+        babelrc: false,
+        ast: false,
         // TODO is this correct ?
-        sourceMapName: "\0rollup-plugin-purs:bundle.map"
+        filename: "\0rollup-plugin-purs:bundle",
+        sourceMaps: true,
+        plugins: plugins
       });
-
-      //console.log(out.code);
-
-      return out;
     }
   };
 };

@@ -1,3 +1,5 @@
+"use strict";
+
 var $walk = require("./walk");
 var $util = require("./util");
 var $isReference = require("is-reference");
