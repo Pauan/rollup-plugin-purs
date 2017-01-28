@@ -125,6 +125,11 @@ module.exports = function (babel) {
                 console.warn("Could not replace " + node.name + " with " + replace.name);
 
               } else {
+                // TODO is this correct ?
+                if (replace.type === "Identifier") {
+                  path.scope.getBinding(replace.name).reference(path);
+                }
+
                 binding.dereference();
 
                 if (!binding.referenced) {
