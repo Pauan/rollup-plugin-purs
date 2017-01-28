@@ -38,15 +38,11 @@ function makeUncurried(binding, path, id, top) {
       };
 
       var body = {
-        type: "VariableDeclarator",
-        id: temp,
-        init: {
-          type: "FunctionExpression",
-          id: null,
-          params: flattened,
-          body: x.body,
-          loc: top.loc
-        }
+        type: "FunctionExpression",
+        id: null,
+        params: flattened,
+        body: x.body,
+        loc: top.loc
       };
 
       x.body = {
@@ -67,18 +63,13 @@ function makeUncurried(binding, path, id, top) {
         loc: x.body.loc
       };
 
-      // TODO hacky
-      if (binding.path.node.type === "VariableDeclarator") {
-        binding.path.insertBefore(body);
-
-      } else {
-        binding.path.insertBefore({
-          type: "VariableDeclaration",
-          kind: "var",
-          declarations: [body],
-          loc: top.loc
-        });
-      }
+      // TODO is this correct ?
+      // TODO maybe this should set unique to true ?
+      // TODO loc ?
+      binding.scope.push({
+        id: temp,
+        init: body
+      });
     }
   }
 }

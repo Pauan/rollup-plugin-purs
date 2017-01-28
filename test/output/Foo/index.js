@@ -20,6 +20,10 @@ function inlined1(a, b, c) {
   return a + 1 + b + 1 + c + 1;
 }
 
+function inlined1_2(a, b, c) {
+  return a + 1 + b + 1 + 1;
+}
+
 var inlined2 = function (a, b, c) {
   return a + 1 + b + 1 + c + 1;
 };
@@ -68,6 +72,9 @@ function mutualRecursive2(a, b, c) {
 var a = 1;
 
 console.log(inlined1(1, 2, 3));
+console.log(inlined1(1, 2));
+console.log(inlined1_2(1, 2));
+console.log(inlined1(1, 2, 3, 4));
 console.log(inlined2(a, 2, 3));
 console.log(inlined3(a, 2, 3));
 console.log(inlined4(a, 2, 3));
@@ -79,6 +86,8 @@ console.log(inlined2(1, 2, 3));
 console.log(recursive(1, 2, 3));
 console.log(recursive2(1, 2, 3));
 console.log(mutualRecursive1(1, 2, 3));
+
+console.log((function foo() { return foo(); })());
 
 function foo(require, exports, module) {
   var x = require("foo");

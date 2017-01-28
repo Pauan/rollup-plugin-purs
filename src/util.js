@@ -34,5 +34,10 @@ exports.withFunctionDefinition = function (binding, fn) {
              definition.init != null &&
              definition.init.type === "FunctionExpression") {
     fn(binding, binding.path.get("init"), definition.id, definition.init);
+
+  } else {
+    // TODO loc
+    // TODO better warning
+    //console.warn("Unknown type: " + definition.type);
   }
 };

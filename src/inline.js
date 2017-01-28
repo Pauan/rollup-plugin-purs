@@ -3,7 +3,7 @@
 var $util = require("./util");
 
 
-var inlineVisitor = {
+var checkVisitor = {
   // TODO handle NewExpression as well ?
   CallExpression: function (path, state) {
     var node = path.node;
@@ -19,7 +19,7 @@ var inlineVisitor = {
           // TODO a bit hacky
           $util.withFunctionDefinition(binding, function (binding, path, id, node) {
             // TODO make this faster ?
-            path.get("body").traverse(inlineVisitor, state);
+            path.get("body").traverse(checkVisitor, state);
           });
 
         } else {
@@ -36,46 +36,84 @@ var inlineVisitor = {
 };
 
 
+function canInlineFunction(path, node) {
+  // Only inline if each argument is used at most once
+  return node.params.every(function (x) {
+    if (x.type === "Identifier") {
+      var binding = path.scope.getBinding(x.name);
+
+      console.assert(binding != null);
+
+      return binding.constant && binding.references <= 1;
+
+    } else {
+      return false;
+    }
+  });
+}
+
+
+function canInline(path, node) {
+  // TODO check node.id ?
+  return node.body.body.length === 1 &&
+         node.body.body[0].type === "ReturnStatement" &&
+         canInlineFunction(path, node);
+}
+
+
 function makeInlined(binding, path, id, top) {
-  var body = top.body.body;
-
-  if (body.length === 1 &&
-      body[0].type === "ReturnStatement") {
-
-    // Only inline if each argument is used at most once
-    // TODO we can lift this restriction later, with better IIFE inlining techniques
-    /*var seenOnce = top.params.every(function (x) {
-      if (x.type === "Identifier") {
-        var binding = path.scope.getBinding(x.name);
-
-        console.assert(binding != null);
-
-        return binding.constant && binding.references <= 1;
-
-      } else {
-        return false;
-      }
-    });*/
-
+  if (canInline(path, top)) {
     var state = {
       function: false,
       recursive: false,
       seen: [binding] // TODO should this start with the binding or not ?
     };
 
-    path.get("body").traverse(inlineVisitor, state);
+    path.get("body").traverse(checkVisitor, state);
 
     if (!state.function && !state.recursive) {
       binding.rollup_plugin_purs_inlined = {
         name: id,
-        params: top.params,
+        params: top.params.map(function (x) { return x.name; }),
         body: top.body,
-        loc: top.loc
+        loc: top.loc,
+        expression: top.body.body[0].argument
       };
     }
   }
 }
 
+
+// TODO loc
+var _void = {
+  type: "UnaryExpression",
+  operator: "void",
+  argument: {
+    type: "NumericLiteral",
+    value: 0
+  },
+  prefix: true
+};
+
+
+var inlineVisitor = {
+  ReferencedIdentifier: function (path, state) {
+    var node = path.node;
+
+    // TODO maybe it should lookup ?
+    // TODO make this faster
+    var index = state.params.indexOf(node.name);
+
+    if (index !== -1) {
+      if (index < state.arguments.length) {
+        path.replaceWith(state.arguments[index]);
+
+      } else {
+        path.replaceWith(_void);
+      }
+    }
+  }
+};
 
 
 module.exports = function (babel) {
@@ -97,16 +135,15 @@ module.exports = function (babel) {
 
               var inlined = binding.rollup_plugin_purs_inlined;
 
+              // TODO what about unused arguments ?
               if (inlined !== false) {
-                node.callee = {
-                  type: "FunctionExpression",
-                  // TODO is this needed ?
-                  //id: inlined.name,
+                // TODO better copying ?
+                path.replaceWith(JSON.parse(JSON.stringify(inlined.expression)));
+
+                path.traverse(inlineVisitor, {
                   params: inlined.params,
-                  body: inlined.body,
-                  // TODO is this correct ?
-                  loc: inlined.loc
-                };
+                  arguments: node.arguments
+                });
               }
             }
           }

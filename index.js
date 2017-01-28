@@ -10,6 +10,7 @@ var $uncurry = require("./src/uncurry");
 var $inline = require("./src/inline");
 var $rename = require("./src/rename");
 var $propagate = require("./src/propagate");
+var $deadCode = require("./src/dead-code");
 
 
 function pursPath(options, path) {
@@ -159,7 +160,6 @@ module.exports = function (options) {
         ]
       });*/
 
-
       var plugins = [];
 
       plugins.push($rename);
@@ -174,14 +174,33 @@ module.exports = function (options) {
         plugins.push($inline);
       }
 
-      //plugins.push($deadCode);
-
       // TODO what about sourceRoot ?
-      return $babel.transform(code, {
+      var info = $babel.transform(code, {
         babelrc: false,
-        ast: false,
+        code: false,
+        ast: true,
+        sourceMaps: false,
         // TODO is this correct ?
         filename: "\0rollup-plugin-purs:bundle",
+        plugins: plugins
+      });
+
+      /*if (plugins.length) {
+        // TODO is this the correct `code` to use ?
+        info = $babel.transformFromAst(info.ast, code, {
+          babelrc: false,
+          code: false,
+          ast: true,
+          sourceMaps: false,
+          plugins: plugins
+        });
+      }*/
+
+      // TODO is this the correct `code` to use ?
+      return $babel.transformFromAst(info.ast, code, {
+        babelrc: false,
+        code: true,
+        ast: false,
         sourceMaps: true,
         plugins: plugins
       });
