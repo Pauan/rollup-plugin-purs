@@ -108,31 +108,71 @@ module.exports = function (options) {
     },
 
     transformBundle: function (code) {
+      /*return $babel.transform("foo", {
+        babelrc: false,
+        ast: false,
+        filename: "\0rollup-plugin-purs:bundle",
+        sourceMaps: true,
+        plugins: [
+          function (babel) {
+            return {
+              visitor: {
+                Identifier: {
+                  enter: function (path) {
+                    if (path.node.name === "foo") {
+                      path.replaceWith({
+                        type: "FunctionExpression",
+                        id: null,
+                        params: [{
+                          type: "Identifier",
+                          name: "bar"
+                        }],
+                        body: {
+                          type: "BlockStatement",
+                          body: [{
+                            type: "ExpressionStatement",
+                            expression: {
+                              type: "Identifier",
+                              name: "bar"
+                            }
+                          }]
+                        }
+                      });
+                    }
+                  }
+                }
+              }
+            };
+          },
+
+          function (babel) {
+            return {
+              visitor: {
+                Identifier: {
+                  enter: function (path) {
+                    console.log(path.node.name, path.scope.getBinding(path.node.name) != null);
+                  }
+                }
+              }
+            };
+          }
+        ]
+      });*/
+
+
       var plugins = [];
 
       plugins.push($rename);
 
       plugins.push($propagate);
 
-      /*plugins.push(function (babel) {
-        return {
-          visitor: {
-            ReferencedIdentifier: {
-              exit: function (path) {
-                console.log(path.node.name, "1");
-              }
-            }
-          }
-        };
-      });*/
-
       if (options.uncurry) {
         plugins.push($uncurry);
       }
 
-      /*if (options.inline) {
+      if (options.inline) {
         plugins.push($inline);
-      }*/
+      }
 
       //plugins.push($deadCode);
 

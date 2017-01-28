@@ -53,6 +53,10 @@ function recursive(a, b, c) {
   return recursive(a + 1, b + 1, c + 1);
 }
 
+function recursive2(a, b, c) {
+  return mutualRecursive1(a + 1, b + 1, c + 1);
+}
+
 function mutualRecursive1(a, b, c) {
   return mutualRecursive2(a + 1, b + 1, c + 1);
 }
@@ -73,6 +77,7 @@ console.log(inlined7(a, 2, 3));
 console.log((function (a) { return inlined1(a, 2, 3); })(1));
 console.log(inlined2(1, 2, 3));
 console.log(recursive(1, 2, 3));
+console.log(recursive2(1, 2, 3));
 console.log(mutualRecursive1(1, 2, 3));
 
 function foo(require, exports, module) {

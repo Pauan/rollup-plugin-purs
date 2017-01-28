@@ -144,231 +144,115 @@ function calculateWeight(node) {
 }
 
 
-function makeInlined(id, top, scope) {
+var inlineVisitor = {
+  // TODO handle NewExpression as well ?
+  CallExpression: function (path, state) {
+    var node = path.node;
+
+    if (node.callee.type === "Identifier") {
+      var binding = path.scope.getBinding(node.callee.name);
+
+      if (binding != null) {
+        // TODO handle aliasing
+        if (state.seen.indexOf(binding) === -1) {
+          state.seen.push(binding);
+
+          // TODO a bit hacky
+          $util.withFunctionDefinition(binding, function (binding, path, id, node) {
+            // TODO make this faster ?
+            path.get("body").traverse(inlineVisitor, state);
+          });
+
+        } else {
+          state.recursive = true;
+          path.stop();
+        }
+      }
+    }
+  },
+  Function: function (path, state) {
+    state.function = true;
+    path.stop();
+  }
+};
+
+
+function makeInlined(binding, path, id, top) {
   var body = top.body.body;
 
   if (body.length === 1 &&
-      body[0].type === "ReturnStatement" &&
-      // Don't inline curried functions
-      body[0].argument.type !== "FunctionExpression") {
+      body[0].type === "ReturnStatement") {
 
-    var weight = calculateWeight(body[0].argument);
+    // Only inline if each argument is used at most once
+    // TODO we can lift this restriction later, with better IIFE inlining techniques
+    /*var seenOnce = top.params.every(function (x) {
+      if (x.type === "Identifier") {
+        var binding = path.scope.getBinding(x.name);
 
-    if (weight < 50) {
-      // TODO hacky
-      // TODO use scope.contains ?
-      if (scope.inlined == null) {
-        scope.inlined = {};
+        console.assert(binding != null);
+
+        return binding.constant && binding.references <= 1;
+
+      } else {
+        return false;
       }
+    });*/
 
-      scope.inlined[id.name] = {
-        name: id,
-        params: top.params,
-        body: top.body,
-        loc: top.loc,
-        expression: body[0].argument
-      };
-    }
-  }
-
-  /*if (body.length === 1 &&
-      body[0].type === "ReturnStatement" &&
-      // Don't inline curried functions
-      body[0].argument.type !== "FunctionExpression" &&
-      top.params.every(function (x) { return x.type === "Identifier"; })) {
-
-    var seen = {};
-
-    top.params.forEach(function (x) {
-      seen[x.name] = 0;
-    });
-
-    $walk(body[0].argument, function (node, traverse) {
-      if (node.type === "Identifier" &&
-          $util.hasKey(seen, node.name)) {
-        ++seen[node.name];
-      }
-
-      traverse(node);
-
-      return node;
-    });
-
-    if (top.params.every(function (x) { return seen[x.name] <= 1; })) {
-      var indexes = {};
-
-      top.params.forEach(function (x, i) {
-        indexes[x.name] = i;
-      });
-
-      // TODO hacky
-      // TODO use scope.contains ?
-      if (scope.inlined == null) {
-        scope.inlined = {};
-      }
-
-      scope.inlined[id.name] = {
-        name: id,
-        params: top.params,
-        body: top.body,
-        loc: top.loc,
-        indexes: indexes,
-        expression: body[0].argument
-      };
-    }
-  }*/
-}
-
-
-function lookupInlined(top, scope) {
-  if (top.type === "Identifier") {
-    var name = top.name;
-
-    var def = $util.lookup(scope, name);
-
-    if (def != null &&
-        def.inlined != null &&
-        $util.hasKey(def.inlined, name)) {
-      return def.inlined[name];
-    }
-  }
-
-  return null;
-}
-
-
-function lookupInlinedCall(top, scope) {
-  var inlined = lookupInlined(top.callee, scope);
-
-  if (inlined !== null) {
-    return {
-      name: inlined.name,
-      expression: {
-        type: "CallExpression",
-        callee: {
-          type: "FunctionExpression",
-          // TODO is this needed ?
-          //id: inlined.name,
-          params: inlined.params,
-          body: inlined.body,
-          // TODO is this correct ?
-          loc: inlined.loc
-        },
-        arguments: top.arguments,
-        loc: top.loc
-      }
+    var state = {
+      function: false,
+      recursive: false,
+      seen: [binding] // TODO should this start with the binding or not ?
     };
 
-  } else {
-    return null;
+    path.get("body").traverse(inlineVisitor, state);
+
+    if (!state.function && !state.recursive) {
+      binding.rollup_plugin_purs_inlined = {
+        name: id,
+        params: top.params,
+        body: top.body,
+        loc: top.loc
+      };
+    }
   }
 }
 
 
-function findInlineFunctions(ast, scope) {
-  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
-    if (node.type === "FunctionDeclaration") {
-      // TODO is this scope correct ?
-      makeInlined(node.id, node, scope.parent);
 
-    } else if (node.type === "VariableDeclaration") {
-      node.declarations.forEach(function (x) {
-        if (x.init !== null && x.init.type === "FunctionExpression") {
-          makeInlined(x.id, x.init, scope);
-        }
-      });
-    }
+module.exports = function (babel) {
+  return {
+    visitor: {
+      CallExpression: {
+        exit: function (path) {
+          var node = path.node;
 
-    traverse(node);
+          if (node.callee.type === "Identifier") {
+            var binding = path.scope.getBinding(node.callee.name);
 
-    return node;
-  });
-}
+            if (binding != null) {
+              if (binding.rollup_plugin_purs_inlined == null) {
+                binding.rollup_plugin_purs_inlined = false;
 
+                $util.withFunctionDefinition(binding, makeInlined);
+              }
 
-function pushInline(id, scope, stack, traverse, node) {
-  var inlined = lookupInlined(id, scope);
+              var inlined = binding.rollup_plugin_purs_inlined;
 
-  if (inlined !== null) {
-    stack.push(inlined.name.name);
-
-    try {
-      traverse(node);
-
-    } finally {
-      stack.pop();
-    }
-
-    return node;
-
-  } else {
-    traverse(node);
-    return node;
-  }
-}
-
-
-function inlineFunctionCalls(ast, scope) {
-  var stack = [];
-
-  // TODO is this correct ?
-  var recursive = false;
-
-  return $walk.scope(ast, scope, function (parent, node, scope, traverse) {
-    // TODO code duplication
-    if (node.type === "FunctionDeclaration") {
-      return pushInline(node.id, scope, stack, traverse, node);
-
-    // TODO code duplication
-    } else if (node.type === "VariableDeclaration") {
-      // TODO should this traverse twice...?
-      node.declarations.forEach(function (x) {
-        if (x.init !== null && x.init.type === "FunctionExpression") {
-          // TODO is this correct ?
-          pushInline(x.id, scope, stack, traverse, x);
-        }
-      });
-
-    } else if (node.type === "CallExpression") {
-      var inlined = lookupInlinedCall(node, scope);
-
-      if (inlined !== null) {
-        if (stack.indexOf(inlined.name.name) === -1) {
-          recursive = false;
-
-          stack.push(inlined.name.name);
-
-          try {
-            traverse(inlined.expression);
-
-          } finally {
-            stack.pop();
+              if (inlined !== false) {
+                node.callee = {
+                  type: "FunctionExpression",
+                  // TODO is this needed ?
+                  //id: inlined.name,
+                  params: inlined.params,
+                  body: inlined.body,
+                  // TODO is this correct ?
+                  loc: inlined.loc
+                };
+              }
+            }
           }
-
-          if (recursive) {
-            // TODO should this traverse or not ?
-            recursive = false;
-
-          } else {
-            return inlined.expression;
-          }
-
-        } else {
-          // TODO is there a better way of doing this ?
-          recursive = true;
-          // TODO should this traverse ?
-          return node;
         }
       }
     }
-
-    traverse(node);
-
-    return node;
-  });
-}
-
-
-module.exports = function (ast, scope) {
-  return inlineFunctionCalls(findInlineFunctions(ast, scope), scope);
+  };
 };
