@@ -97,7 +97,8 @@ module.exports = function (options) {
           return new Promise(function (resolve, reject) {
             $fs.stat(fullPath, function (err, stat) {
               if (err) {
-                reject(err);
+                // TODO better error handling
+                resolve(null);
 
               // TODO is this correct ?
               // TODO only do this for the outputDir ?
