@@ -1,5 +1,4 @@
 var purs = require("../index.js");
-var resolve = require("rollup-plugin-node-resolve");
 
 export default {
   entry: "Main.purs",
@@ -11,7 +10,6 @@ export default {
     purs({
       inline: true,
       uncurry: true
-    }),
-    resolve()
+    })
   ]
 };

@@ -59,31 +59,57 @@ module.exports = function (options) {
       }
     },
 
-    resolveId: function (filePath) {
-      // TODO hacky
-      if (filePath === entryPath) {
+    resolveId: function (filePath, importer) {
+      // TODO is this correct ?
+      if (/\u0000/.test(filePath)) {
         return filePath;
 
-      } else if ($path.extname(filePath) === ".purs") {
-        // TODO hacky
-        return new Promise(function (resolve, reject) {
-          $fs.readFile(filePath, { encoding: "utf8" }, function (err, file) {
-            if (err) {
-              reject(err);
+      } else {
+        // TODO is this path correct ?
+        // TODO apply the `filter` to the ID ?
+        var fullPath = (importer == null
+          ? filePath
+          : $path.join($path.dirname(importer), filePath));
 
-            } else {
-              // TODO super hacky
-              var a = /(?:^|\n|\r\n) *module +([^ ]+)/.exec(file);
-
-              if (a) {
-                resolve(pursPath(options, a[1]));
+        if ($path.extname(filePath) === ".purs") {
+          // TODO hacky
+          return new Promise(function (resolve, reject) {
+            $fs.readFile(fullPath, { encoding: "utf8" }, function (err, file) {
+              if (err) {
+                reject(err);
 
               } else {
-                reject(new Error("Could not detect module name for file " + filePath));
+                // TODO super hacky
+                var a = /(?:^|\n|\r\n) *module +([^ ]+)/.exec(file);
+
+                if (a) {
+                  resolve(pursPath(options, a[1]));
+
+                } else {
+                  reject(new Error("Could not detect module name for file " + fullPath));
+                }
               }
-            }
+            });
           });
-        });
+
+        // TODO hacky
+        } else {
+          return new Promise(function (resolve, reject) {
+            $fs.stat(fullPath, function (err, stat) {
+              if (err) {
+                reject(err);
+
+              // TODO is this correct ?
+              // TODO only do this for the outputDir ?
+              } else if (stat.isDirectory()) {
+                resolve($path.join(fullPath, "index.js"));
+
+              } else {
+                resolve(fullPath);
+              }
+            });
+          });
+        }
       }
     },
 

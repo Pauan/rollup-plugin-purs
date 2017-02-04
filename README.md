@@ -16,7 +16,6 @@ Here is an example configuration:
 
 ```js
 import purs from "rollup-plugin-purs";
-import resolve from "rollup-plugin-node-resolve";
 
 export default {
   entry: "src/Main.purs",
@@ -24,13 +23,10 @@ export default {
   format: "iife",
   sourceMap: true,
   plugins: [
-    purs(),
-    resolve()
+    purs()
   ]
 };
 ```
-
-In addition to `rollup-plugin-purs`, you will also need to use the [`rollup-plugin-node-resolve`](https://github.com/rollup/rollup-plugin-node-resolve) plugin.
 
 This plugin does **not** compile PureScript code, so you will first need to run `pulp build` (or equivalent) before using this plugin.
 
@@ -75,6 +71,8 @@ The comments must be exactly the same as above, and they must be placed at the t
 ## Optimizations
 
 In addition to the uncurrying and inlining optimizations, there are some optimizations which are *always* applied:
+
+* Dead code elimination
 
 * Constant propagation
 
