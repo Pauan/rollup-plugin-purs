@@ -53,6 +53,15 @@ function inlined7(a, b, c) {
   return (a = 10), (self = b);
 }
 
+function inlined8(a, b, c) {
+  if (a) {
+    return b;
+
+  } else {
+    return c;
+  }
+}
+
 function recursive(a, b, c) {
   return recursive(a + 1, b + 1, c + 1);
 }
@@ -81,6 +90,7 @@ console.log(inlined4(a, 2, 3));
 console.log(inlined5(a, 2, 3));
 console.log(inlined6(a, 2, 3));
 console.log(inlined7(a, 2, 3));
+console.log(inlined8(a, 2, 3));
 console.log((function (a) { return inlined1(a, 2, 3); })(1));
 console.log(inlined2(1, 2, 3));
 console.log(recursive(1, 2, 3));

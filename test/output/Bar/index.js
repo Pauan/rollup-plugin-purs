@@ -104,6 +104,45 @@ function main() {
   console.log(notPropagated);
   console.log(assigned);
 
+  function unsafeCompareImplRecursive(a) {
+    return function (b) {
+      return function (c) {
+        return function (d) {
+          return a + b + c + d + unsafeCompareImplRecursive(1)(2)(3)(4);
+        };
+      };
+    };
+  }
+
+  function unsafeCompareImpl(a) {
+    return function (b) {
+      return function (c) {
+        return function (d) {
+          return a + b + c + d;
+        };
+      };
+    };
+  }
+
+  var unsafeCompare1 = unsafeCompareImpl(1);
+  var unsafeCompare2 = unsafeCompareImpl(1)(2);
+  var unsafeCompare3 = unsafeCompareImpl(1)(2)(3);
+  var unsafeCompare4 = unsafeCompareImpl(1)(2)(3)(4);
+  var unsafeCompare5 = unsafeCompareImpl(1)(2)(3)(4)(5);
+  var unsafeCompare6 = unsafeCompareImpl(1)(2)(3)(4)(5)(6);
+
+  var unsafeCompare7 = unsafeCompare1(2)(3)(4);
+  var unsafeCompare8 = unsafeCompare2(3);
+  var unsafeCompare9 = unsafeCompare3(4);
+
+  console.log(unsafeCompareImplRecursive(1)(2)(3)(4));
+  console.log(unsafeCompareImpl);
+  console.log(unsafeCompareImpl);
+  console.log(unsafeCompareImpl);
+  console.log(unsafeCompare1);
+  console.log(unsafeCompare2);
+  console.log(unsafeCompare8);
+
   function innerCurried2(a) {
     return function (b) {
       return function (c) {

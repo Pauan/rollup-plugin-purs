@@ -5,6 +5,7 @@ module.exports = function (babel) {
   return {
     visitor: {
       // TODO make this faster ?
+      // TODO maybe this shouldn't use BindingIdentifier ?
       BindingIdentifier: function (path) {
         var node = path.node;
 

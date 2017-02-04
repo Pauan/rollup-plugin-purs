@@ -10,7 +10,6 @@ var $uncurry = require("./src/uncurry");
 var $inline = require("./src/inline");
 var $rename = require("./src/rename");
 var $propagate = require("./src/propagate");
-var $deadCode = require("./src/dead-code");
 
 
 function pursPath(options, path) {
@@ -160,11 +159,22 @@ module.exports = function (options) {
         ]
       });*/
 
+      // TODO what about sourceRoot ?
+      var info = $babel.transform(code, {
+        babelrc: false,
+        code: false,
+        ast: true,
+        sourceMaps: false,
+        // TODO is this correct ?
+        filename: "\0rollup-plugin-purs:bundle",
+        plugins: [
+          $rename,
+          // TODO maybe we don't need this anymore ?
+          $propagate
+        ]
+      });
+
       var plugins = [];
-
-      plugins.push($rename);
-
-      plugins.push($propagate);
 
       if (options.uncurry) {
         plugins.push($uncurry);
@@ -174,35 +184,28 @@ module.exports = function (options) {
         plugins.push($inline);
       }
 
-      // TODO what about sourceRoot ?
-      var info = $babel.transform(code, {
-        babelrc: false,
-        code: false,
-        ast: true,
-        sourceMaps: false,
-        // TODO is this correct ?
-        filename: "\0rollup-plugin-purs:bundle",
-        plugins: plugins
-      });
-
-      /*if (plugins.length) {
+      if (plugins.length) {
         // TODO is this the correct `code` to use ?
-        info = $babel.transformFromAst(info.ast, code, {
+        info = $babel.transformFromAst(info.ast, null, {
           babelrc: false,
           code: false,
           ast: true,
           sourceMaps: false,
           plugins: plugins
         });
-      }*/
+      }
 
       // TODO is this the correct `code` to use ?
-      return $babel.transformFromAst(info.ast, code, {
+      return $babel.transformFromAst(info.ast, null, {
         babelrc: false,
         code: true,
         ast: false,
         sourceMaps: true,
-        plugins: plugins
+        plugins: [
+          // TODO use babel-preset-babili ?
+          "minify-constant-folding",
+          "minify-dead-code-elimination"
+        ]
       });
     }
   };

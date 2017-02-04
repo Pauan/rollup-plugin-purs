@@ -1,6 +1,21 @@
 "use strict";
 
 
+exports.pushAll = function (a, b) {
+  var length = b.length;
+
+  for (var i = 0; i < length; ++i) {
+    a.push(b[i]);
+  }
+};
+
+
+exports.flatten = function (a) {
+  // TODO better flatten function ?
+  return [].concat.apply([], a);
+};
+
+
 exports.hasKey = function (obj, key) {
   return {}.hasOwnProperty.call(obj, key);
 };

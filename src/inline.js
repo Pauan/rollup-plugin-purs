@@ -119,32 +119,30 @@ var inlineVisitor = {
 module.exports = function (babel) {
   return {
     visitor: {
-      CallExpression: {
-        exit: function (path) {
-          var node = path.node;
+      CallExpression: function (path) {
+        var node = path.node;
 
-          if (node.callee.type === "Identifier") {
-            var binding = path.scope.getBinding(node.callee.name);
+        if (node.callee.type === "Identifier") {
+          var binding = path.scope.getBinding(node.callee.name);
 
-            if (binding != null) {
-              if (binding.rollup_plugin_purs_inlined == null) {
-                binding.rollup_plugin_purs_inlined = false;
+          if (binding != null) {
+            if (binding.rollup_plugin_purs_inlined == null) {
+              binding.rollup_plugin_purs_inlined = false;
 
-                $util.withFunctionDefinition(binding, makeInlined);
-              }
+              $util.withFunctionDefinition(binding, makeInlined);
+            }
 
-              var inlined = binding.rollup_plugin_purs_inlined;
+            var inlined = binding.rollup_plugin_purs_inlined;
 
-              // TODO what about unused arguments ?
-              if (inlined !== false) {
-                // TODO better copying ?
-                path.replaceWith(JSON.parse(JSON.stringify(inlined.expression)));
+            // TODO what about unused arguments ?
+            if (inlined !== false) {
+              // TODO better copying ?
+              path.replaceWith(JSON.parse(JSON.stringify(inlined.expression)));
 
-                path.traverse(inlineVisitor, {
-                  params: inlined.params,
-                  arguments: node.arguments
-                });
-              }
+              path.traverse(inlineVisitor, {
+                params: inlined.params,
+                arguments: node.arguments
+              });
             }
           }
         }

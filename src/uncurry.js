@@ -4,6 +4,8 @@ var $util = require("./util");
 
 
 function makeUncurried(binding, path, id, top) {
+  console.assert(path.node === top);
+
   // Only decurry 1-argument functions
   if (top.params.length === 1) {
     var params = [top.params];
@@ -21,8 +23,7 @@ function makeUncurried(binding, path, id, top) {
     }
 
     if (x !== top) {
-      // TODO better flatten function ?
-      var flattened = [].concat.apply([], params);
+      var flattened = $util.flatten(params);
 
       // TODO guarantee that collisions cannot occur ?
       var temp = binding.scope.generateUidIdentifier(id.name + "_uncurried");
@@ -35,15 +36,22 @@ function makeUncurried(binding, path, id, top) {
         id: id,
         uid: temp,
         params: params,
+        flattened: flattened
       };
 
-      var body = {
-        type: "FunctionExpression",
-        id: null,
-        params: flattened,
-        body: x.body,
-        loc: top.loc
-      };
+      // TODO is this correct ?
+      // TODO maybe this should set unique to true ?
+      // TODO loc ?
+      binding.scope.push({
+        id: temp,
+        init: {
+          type: "FunctionExpression",
+          id: null,
+          params: flattened,
+          body: x.body,
+          loc: top.loc
+        }
+      });
 
       x.body = {
         type: "BlockStatement",
@@ -63,13 +71,7 @@ function makeUncurried(binding, path, id, top) {
         loc: x.body.loc
       };
 
-      // TODO is this correct ?
-      // TODO maybe this should set unique to true ?
-      // TODO loc ?
-      binding.scope.push({
-        id: temp,
-        init: body
-      });
+      path.visit();
     }
   }
 }
@@ -98,58 +100,112 @@ function getUncurriedCall(path, node) {
 }
 
 
-function isArgumentsSaturated(expected, actual) {
-  var length = expected.length;
-
-  if (length === actual.length) {
-    for (var i = 0; i < length; ++i) {
-      if (expected[i].length !== actual[i].length) {
-        return false;
-      }
-    }
-
-    return true;
-
-  } else {
-    return false;
-  }
-}
-
-
 module.exports = function (babel) {
   return {
     visitor: {
       // TODO what about NewExpression ?
-      CallExpression: {
-        // TODO a little hacky that it uses exit
-        exit: function (path) {
-          var node = path.node;
+      CallExpression: function (path) {
+        var node = path.node;
 
-          var args = [];
+        var args = [];
 
-          while (node.type === "CallExpression") {
-            args.push(node.arguments);
-            node = node.callee;
-          }
+        while (node.type === "CallExpression") {
+          args.push(node.arguments);
+          node = node.callee;
+        }
 
-          var uncurried = getUncurriedCall(path, node);
+        var uncurried = getUncurriedCall(path, node);
 
-          if (uncurried != null) {
-            args.reverse();
+        if (uncurried != null) {
+          args.reverse();
 
-            if (isArgumentsSaturated(uncurried.params, args)) {
-              path.replaceWith({
+          var flattened = [];
+
+          var body = {
+            type: "CallExpression",
+            callee: uncurried.uid,
+            arguments: flattened
+          };
+
+          if (args.length >= uncurried.params.length) {
+            for (var i = uncurried.params.length - 1; i >= 0; --i) {
+              $util.pushAll(flattened, args[i]);
+            }
+
+            for (var i = uncurried.params.length; i < args.length; ++i) {
+              body = {
                 type: "CallExpression",
-                callee: uncurried.uid,
-                // TODO better flatten function
-                arguments: [].concat.apply([], args),
-                // TODO is this loc correct ?
-                loc: path.node.loc
-              });
+                callee: body,
+                arguments: args[i]
+              };
+            }
+
+          } else {
+            for (var i = uncurried.params.length - 1; i >= args.length; --i) {
+              $util.pushAll(flattened, uncurried.params[i]);
+
+              body = {
+                type: "FunctionExpression",
+                id: null,
+                params: uncurried.params[i],
+                body: {
+                  type: "BlockStatement",
+                  body: [{
+                    type: "ReturnStatement",
+                    argument: body
+                  }]
+                }
+              }
+            }
+
+            for (var i = args.length - 1; i >= 0; --i) {
+              $util.pushAll(flattened, args[i]);
             }
           }
+
+          flattened.reverse();
+
+          path.replaceWith(body);
         }
-      }
+      },
+
+      // TODO should this use ReferencedIdentifier ?
+      /*ReferencedIdentifier: function (path) {
+        var node = path.node;
+
+        var uncurried = getUncurriedCall(path, node);
+
+        if (uncurried != null) {
+          var flattened = [];
+
+          var body = {
+            type: "CallExpression",
+            callee: uncurried.uid,
+            arguments: flattened
+          };
+
+          for (var i = uncurried.params.length - 1; i >= 0; --i) {
+            $util.pushAll(flattened, uncurried.params[i]);
+
+            body = {
+              type: "FunctionExpression",
+              id: null,
+              params: uncurried.params[i],
+              body: {
+                type: "BlockStatement",
+                body: [{
+                  type: "ReturnStatement",
+                  argument: body
+                }]
+              }
+            }
+          }
+
+          flattened.reverse();
+
+          path.replaceWith(body);
+        }
+      }*/
     }
   };
 };
