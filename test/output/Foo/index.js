@@ -62,6 +62,10 @@ function inlined8(a, b, c) {
   }
 }
 
+function inlinedSelf(a) {
+  return a;
+}
+
 function recursive(a, b, c) {
   return recursive(a + 1, b + 1, c + 1);
 }
@@ -96,6 +100,7 @@ console.log(inlined2(1, 2, 3));
 console.log(recursive(1, 2, 3));
 console.log(recursive2(1, 2, 3));
 console.log(mutualRecursive1(1, 2, 3));
+console.log(inlinedSelf(a + inlined3(1, 2, 3)));
 
 console.log((function foo() { return foo(); })());
 

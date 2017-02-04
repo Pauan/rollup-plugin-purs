@@ -136,8 +136,16 @@ module.exports = function (babel) {
 
             // TODO what about unused arguments ?
             if (inlined !== false) {
+              // TODO is this copy needed ?
               // TODO better copying ?
-              path.replaceWith(JSON.parse(JSON.stringify(inlined.expression)));
+              var copy = JSON.parse(JSON.stringify(inlined.expression));
+
+              // TODO super hacky
+              path.replaceWith({
+                type: "SequenceExpression",
+                expressions: [copy],
+                loc: copy.loc
+              });
 
               path.traverse(inlineVisitor, {
                 params: inlined.params,
