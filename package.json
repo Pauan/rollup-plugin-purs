@@ -1,6 +1,6 @@
 {
   "name": "rollup-plugin-purs",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Bundle PureScript modules with Rollup",
   "repository": "Pauan/rollup-plugin-purs",
   "license": "MIT",
