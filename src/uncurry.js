@@ -102,9 +102,26 @@ function getUncurriedCall(path, node) {
 
 module.exports = function (babel) {
   return {
+    pre: function () {
+      this.uncurriedSaturated = 0;
+      this.uncurriedUnsaturated = 0;
+      this.regular = 0;
+      this.curried = 0;
+    },
+    post: function () {
+      if (this.opts.debug) {
+        // TODO does this go to stdout or stderr ?
+        console.info("");
+        console.info("* Debug uncurrying");
+        console.info(" * Curried function calls (saturated): " + this.uncurriedSaturated);
+        console.info(" * Curried function calls (synthesized): " + this.uncurriedUnsaturated);
+        console.info(" * Curried function calls (unoptimized): " + this.curried);
+        console.info(" * Regular function calls: " + this.regular);
+      }
+    },
     visitor: {
       // TODO what about NewExpression ?
-      CallExpression: function (path) {
+      CallExpression: function (path, state) {
         var node = path.node;
 
         var args = [];
@@ -128,6 +145,8 @@ module.exports = function (babel) {
           };
 
           if (args.length >= uncurried.params.length) {
+            ++state.uncurriedSaturated;
+
             for (var i = uncurried.params.length - 1; i >= 0; --i) {
               $util.pushAll(flattened, args[i]);
             }
@@ -141,6 +160,11 @@ module.exports = function (babel) {
             }
 
           } else {
+            ++state.uncurriedUnsaturated;
+
+            // TODO remove this later
+            var created = false;
+
             for (var i = uncurried.params.length - 1; i >= args.length; --i) {
               $util.pushAll(flattened, uncurried.params[i]);
 
@@ -156,7 +180,11 @@ module.exports = function (babel) {
                   }]
                 }
               }
+
+              created = true;
             }
+
+            console.assert(created === true);
 
             for (var i = args.length - 1; i >= 0; --i) {
               $util.pushAll(flattened, args[i]);
@@ -166,46 +194,29 @@ module.exports = function (babel) {
           flattened.reverse();
 
           path.replaceWith(body);
-        }
-      },
 
-      // TODO should this use ReferencedIdentifier ?
-      /*ReferencedIdentifier: function (path) {
-        var node = path.node;
+        } else {
+          var curried = 0;
 
-        var uncurried = getUncurriedCall(path, node);
+          for (var i = 0; i < args.length; ++i) {
+            // Curried functions always take a single argument
+            if (args[i].length === 1) {
+              ++curried;
 
-        if (uncurried != null) {
-          var flattened = [];
-
-          var body = {
-            type: "CallExpression",
-            callee: uncurried.uid,
-            arguments: flattened
-          };
-
-          for (var i = uncurried.params.length - 1; i >= 0; --i) {
-            $util.pushAll(flattened, uncurried.params[i]);
-
-            body = {
-              type: "FunctionExpression",
-              id: null,
-              params: uncurried.params[i],
-              body: {
-                type: "BlockStatement",
-                body: [{
-                  type: "ReturnStatement",
-                  argument: body
-                }]
-              }
+            } else {
+              break;
             }
           }
 
-          flattened.reverse();
+          // TODO is this check correct ?
+          if (args.length > 1 && curried > 0) {
+            ++state.curried;
 
-          path.replaceWith(body);
+          } else {
+            ++state.regular;
+          }
         }
-      }*/
+      }
     }
   };
 };

@@ -118,8 +118,23 @@ var inlineVisitor = {
 
 module.exports = function (babel) {
   return {
+    pre: function () {
+      this.inlined = 0;
+      this.uninlined = 0;
+      this.cantInlined = 0;
+    },
+    post: function () {
+      if (this.opts.debug) {
+        // TODO does this go to stdout or stderr ?
+        console.info("");
+        console.info("* Debug inlining");
+        console.info(" * Function calls (inlined): " + this.inlined);
+        console.info(" * Function calls (not inlined): " + this.uninlined);
+        console.info(" * Function calls (can't inline): " + this.cantInlined);
+      }
+    },
     visitor: {
-      CallExpression: function (path) {
+      CallExpression: function (path, state) {
         var node = path.node;
 
         if (node.callee.type === "Identifier") {
@@ -136,6 +151,8 @@ module.exports = function (babel) {
 
             // TODO what about unused arguments ?
             if (inlined !== false) {
+              ++state.inlined;
+
               // TODO is this copy needed ?
               // TODO better copying ?
               var copy = JSON.parse(JSON.stringify(inlined.expression));
@@ -151,8 +168,17 @@ module.exports = function (babel) {
                 params: inlined.params,
                 arguments: node.arguments
               });
+
+            } else {
+              ++state.uninlined;
             }
+
+          } else {
+            ++state.cantInlined;
           }
+
+        } else {
+          ++state.cantInlined;
         }
       }
     }

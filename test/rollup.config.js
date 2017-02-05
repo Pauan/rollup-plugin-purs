@@ -9,7 +9,8 @@ export default {
   plugins: [
     purs({
       inline: true,
-      uncurry: true
+      uncurry: true,
+      debug: true
     })
   ]
 };

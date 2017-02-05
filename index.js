@@ -211,11 +211,11 @@ module.exports = function (options) {
       var plugins = [];
 
       if (options.uncurry) {
-        plugins.push($uncurry);
+        plugins.push([$uncurry, { debug: options.debug }]);
       }
 
       if (options.inline) {
-        plugins.push($inline);
+        plugins.push([$inline, { debug: options.debug }]);
       }
 
       if (plugins.length) {
