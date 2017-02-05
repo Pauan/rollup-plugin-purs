@@ -123,7 +123,7 @@ module.exports = function (babel) {
                 type: "FunctionExpression",
                 id: null,
                 // TODO should it copy this ?
-                params: inlined.params,
+                params: JSON.parse(JSON.stringify(inlined.params)),
                 // TODO better copying ?
                 body: JSON.parse(JSON.stringify(inlined.body)),
                 loc: inlined.loc

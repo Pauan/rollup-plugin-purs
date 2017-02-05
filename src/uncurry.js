@@ -166,11 +166,13 @@ module.exports = function (babel) {
             var created = false;
 
             for (var i = uncurried.params.length - 1; i >= args.length; --i) {
+              // TODO make a copy of the params ?
               $util.pushAll(flattened, uncurried.params[i]);
 
               body = {
                 type: "FunctionExpression",
                 id: null,
+                // TODO make a copy of the params ?
                 params: uncurried.params[i],
                 body: {
                   type: "BlockStatement",
@@ -179,7 +181,7 @@ module.exports = function (babel) {
                     argument: body
                   }]
                 }
-              }
+              };
 
               created = true;
             }

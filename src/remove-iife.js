@@ -11,8 +11,9 @@ function canInlineParams(params) {
 
 // TODO code duplication
 function canInlineFunction(node) {
-  // TODO check node.id ?
-  return node.body.body.length === 1 &&
+  // TODO allow for the id, as long as it's not called ?
+  return node.id === null &&
+         node.body.body.length === 1 &&
          node.body.body[0].type === "ReturnStatement";
 }
 
