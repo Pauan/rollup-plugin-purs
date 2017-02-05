@@ -10,6 +10,8 @@ var $uncurry = require("./src/uncurry");
 var $inline = require("./src/inline");
 var $rename = require("./src/rename");
 var $propagate = require("./src/propagate");
+var $removeSequence = require("./src/remove-sequence");
+var $removeIIFE = require("./src/remove-iife");
 
 
 function pursPath(options, path) {
@@ -203,12 +205,15 @@ module.exports = function (options) {
         filename: "\0rollup-plugin-purs:bundle",
         plugins: [
           $rename,
-          // TODO maybe we don't need this anymore ?
+          // TODO better way of handling this ?
           $propagate
         ]
       });
 
       var plugins = [];
+
+      // TODO better way of handling this ?
+      plugins.push($propagate);
 
       if (options.uncurry) {
         plugins.push([$uncurry, { debug: options.debug }]);
@@ -217,6 +222,8 @@ module.exports = function (options) {
       if (options.inline) {
         plugins.push([$inline, { debug: options.debug }]);
       }
+
+      plugins.push([$removeIIFE, { debug: options.debug }]);
 
       if (plugins.length) {
         // TODO is this the correct `code` to use ?
@@ -236,6 +243,9 @@ module.exports = function (options) {
         ast: false,
         sourceMaps: true,
         plugins: [
+          $removeSequence,
+          // TODO better way of handling this ?
+          $propagate,
           // TODO use babel-preset-babili ?
           "minify-constant-folding",
           "minify-dead-code-elimination"
