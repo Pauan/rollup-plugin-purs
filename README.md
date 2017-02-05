@@ -42,7 +42,8 @@ purs({
   outputDir: "output",  // Directory where the PureScript files are located
   runMain: true,        // Whether to call the `main` function or not
   uncurry: true,        // Whether to apply the uncurrying optimization or not
-  inline: true          // Whether to inline some functions or not
+  inline: true,         // Whether to inline some functions or not
+  debug: false          // Displays additional warnings and statistics
 })
 ```
 
@@ -74,7 +75,14 @@ In addition to the uncurrying and inlining optimizations, there are some optimiz
 
 * Dead code elimination
 
-* Constant propagation
+* Constant propagation/folding
+
+
+## Planned optimizations
+
+* Typeclass instance inlining
+
+* Common subexpression elimination
 
 
 ## License

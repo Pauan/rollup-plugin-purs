@@ -42,6 +42,10 @@ module.exports = function (options) {
     options.inline = true;
   }
 
+  if (options.debug == null) {
+    options.debug = false;
+  }
+
   var filter = $utils.createFilter(options.include, options.exclude);
 
   var entry = null;
@@ -65,11 +69,14 @@ module.exports = function (options) {
         return filePath;
 
       } else {
+        // TODO is this correct ?
+        var dir = (importer == null
+          ? process.cwd()
+          : $path.dirname(importer));
+
         // TODO is this path correct ?
         // TODO apply the `filter` to the ID ?
-        var fullPath = (importer == null
-          ? filePath
-          : $path.join($path.dirname(importer), filePath));
+        var fullPath = $path.join(dir, filePath);
 
         if ($path.extname(filePath) === ".purs") {
           // TODO hacky
