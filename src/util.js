@@ -21,6 +21,13 @@ exports.hasKey = function (obj, key) {
 };
 
 
+exports.eachObject = function (obj, fn) {
+  Object.keys(obj).forEach(function (key) {
+    fn(key, obj[key]);
+  });
+};
+
+
 // TODO prevent an infinite loop from occurring ?
 exports.matches = function (string, re) {
   const output = [];

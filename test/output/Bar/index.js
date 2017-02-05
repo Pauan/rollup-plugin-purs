@@ -1,3 +1,12 @@
+var globals = 10;
+
+(function () {
+  console.log(globals_119);
+})();
+
+console.log(globals);
+
+
 var bar = "bar4";
 
 exports.bar1 = "bar1";
