@@ -85,9 +85,11 @@ function mutualRecursive2(a, b, c) {
 var a = 1;
 
 console.log(inlined1(1, 2, 3));
+console.log(inlined1(4, 5, 6));
 console.log(inlined1(1, 2));
 console.log(inlined1_2(1, 2));
 console.log(inlined1(1, 2, 3, 4));
+console.log(inlined1(1, 2, 3, console.log("HI")));
 console.log(inlined2(a, 2, 3));
 console.log(inlined3(a, 2, 3));
 console.log(inlined4(a, 2, 3));

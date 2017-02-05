@@ -99,22 +99,13 @@ module.exports = function (babel) {
           if (canInlineFunction(callee) && canInlineParams(params)) {
             ++this.removed;
 
-            // TODO is this copy needed ?
-            // TODO better copying ?
-            var copy = JSON.parse(JSON.stringify(callee.body.body[0].argument));
-
-            // TODO super hacky
-            path.replaceWith({
-              type: "SequenceExpression",
-              expressions: [copy],
-              loc: copy.loc
-            });
-
             // TODO what about unused arguments ?
-            path.traverse(inlineVisitor, {
+            subPath.traverse(inlineVisitor, {
               params: params,
               arguments: node.arguments
             });
+
+            path.replaceWith(callee.body.body[0].argument);
 
           } else {
             ++this.unremoved;

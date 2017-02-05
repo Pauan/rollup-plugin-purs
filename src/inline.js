@@ -122,8 +122,10 @@ module.exports = function (babel) {
               node.callee = {
                 type: "FunctionExpression",
                 id: null,
+                // TODO should it copy this ?
                 params: inlined.params,
-                body: inlined.body,
+                // TODO better copying ?
+                body: JSON.parse(JSON.stringify(inlined.body)),
                 loc: inlined.loc
               };
 
