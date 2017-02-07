@@ -2,164 +2,12 @@
 
 var $acorn = require("acorn");
 var $util = require("./util");
-var $isReference = require("is-reference");
-
-
-function isObject(x) {
-  return x != null && typeof x === "object";
-}
-
-function walkArray(array, node, state, fn) {
-  var length = array.length;
-
-  for (var i = 0; i < length; ++i) {
-    var value = array[i];
-
-    // TODO is this correct ?
-    if (value != null) {
-      console.assert(typeof value.type === "string");
-
-      fn(node, value, state);
-    }
-  }
-}
-
-function walk(node, state, fn) {
-  console.assert(typeof node.type === "string");
-
-  // TODO is this necessary ?
-  var keys = Object.keys(node);
-
-  var length = keys.length;
-
-  for (let i = 0; i < length; ++i) {
-    var key = keys[i];
-    var value = node[key];
-
-    if (isObject(value)) {
-      if (Array.isArray(value)) {
-        walkArray(value, node, state, fn);
-
-      } else if (typeof value.type === "string") {
-        fn(node, value, state);
-      }
-    }
-  }
-}
+var $traverseExpression = require("./expression");
 
 
 /*function walk(node, state, override, fn) {
   $walk.base[override || node.type](node, state, fn);
 }*/
-
-
-function generateName(state, prefix) {
-  for (;;) {
-    var name = prefix + "_" + (++state.varCounter);
-
-    if (!state.globals[name]) {
-      return name;
-    }
-  }
-}
-
-
-function withScope(state, type, fn) {
-  var scope = {
-    type: type,
-    definitions: {},
-    uniques: []
-  };
-
-  state.scopes.push(scope);
-
-  try {
-    return fn();
-
-  } finally {
-    state.scopes.pop();
-
-    $util.eachObject(scope.definitions, function (key, binding) {
-      var name = generateName(state, binding.name);
-
-      binding.uses.forEach(function (node) {
-        node.name = name;
-      });
-    });
-
-    scope.uniques.forEach(function (binding) {
-      var name = generateName(state, "");
-
-      binding.identifier.name = name;
-    });
-  }
-}
-
-
-function markGlobal(state, name) {
-  state.globals[name] = true;
-}
-
-
-function defineUnique(state, type) {
-  var i = state.scopes.length;
-
-  while (i--) {
-    var scope = state.scopes[i];
-
-    if (scope.type === type || scope.type === "program") {
-      var binding = {
-        identifier: {
-          type: "Identifier",
-          name: "" // TODO is this correct ?
-        }
-      };
-
-      scope.uniques.push(binding);
-
-      return binding;
-    }
-  }
-
-  throw new Error("Could not define unique: invalid scope");
-}
-
-
-function defineVar(state, type, name) {
-  var i = state.scopes.length;
-
-  while (i--) {
-    var scope = state.scopes[i];
-
-    if (scope.type === type || scope.type === "program") {
-      return scope.definitions[name] = {
-        name: name,
-        uses: []
-      };
-    }
-  }
-
-  throw new Error("Could not define var " + name + ": invalid scope");
-}
-
-
-function lookupVar(state, name) {
-  var i = state.scopes.length;
-
-  if (i === 0) {
-    throw new Error("Could not lookup var " + name + ": invalid scope");
-  }
-
-  while (i--) {
-    var scope = state.scopes[i];
-
-    if ($util.hasKey(scope.definitions, name)) {
-      return scope.definitions[name];
-    }
-  }
-
-  return null;
-}
 
 
 function withBlock(state, type, fn) {
@@ -199,7 +47,7 @@ function walkPattern(parent, node, state, fn) {
   } else if (node.type === "AssignmentPattern") {
     walkPattern(node, node.left, state, fn);
     // TODO is this correct ?
-    traverseExpression(node, node.right, state);
+    node.right = $traverseExpression(node, node.right, state, false);
 
   } else {
     throw new Error("Invalid type: " + node.type);
@@ -242,18 +90,6 @@ function makeBlockStatement(node) {
 }
 
 
-function defineIdentifier(state, type, node) {
-  var binding = defineVar(state, type, node.name);
-
-  binding.uses.push(node);
-}
-
-
-function isFunctionExpression(node) {
-  return node.type === "FunctionExpression" || node.type === "ArrowFunctionExpression";
-}
-
-
 function traverseFunction(parent, node, state, id) {
   withScope(state, "function", function () {
     if (id != null) {
@@ -276,83 +112,152 @@ function traverseFunction(parent, node, state, id) {
 }
 
 
-function traverseExpression(parent, node, state) {
-  if (isFunctionExpression(node)) {
-    traverseFunction(parent, node, state, node.id);
+function _void(node) {
+  return {
+    type: "UnaryExpression",
+    operator: "void",
+    prefix: true,
+    argument: {
+      type: "Literal",
+      value: 0,
+      start: node.start,
+      end: node.end,
+      loc: node.loc
+    },
+    start: node.start,
+    end: node.end,
+    loc: node.loc
+  };
+}
 
-  } else if (node.type === "Identifier") {
-    if ($isReference(node, parent)) {
-      var binding = lookupVar(state, node.name);
 
-      if (binding == null) {
-        markGlobal(state, node.name);
+function expressionStatement(node) {
+  return {
+    type: "ExpressionStatement",
+    expression: node,
+    start: node.start,
+    end: node.end,
+    loc: node.loc
+  };
+}
+
+
+function assignmentExpression(left, right, base) {
+  return {
+    type: "AssignmentExpression",
+    operator: "=",
+    left: left,
+    right: right,
+    start: base.start,
+    end: base.end,
+    loc: base.loc
+  };
+}
+
+
+function hasSideEffects(parent, node, state) {
+  if ((node.type === "UpdateExpression") ||
+      (node.type === "UnaryExpression" && node.operator === "delete") ||
+      (node.type === "AssignmentExpression") ||
+      // TODO this is a little bit strict...
+      (node.type === "MemberExpression") ||
+      (node.type === "CallExpression") ||
+      (node.type === "NewExpression")) {
+    return true;
+
+  } else {
+    return walk(node, state, hasSideEffects);
+  }
+}
+
+
+function optimizeIIFE(parent, node, state) {
+  node.callee = $traverseExpression(node, node.callee, state, true);
+
+  var callee = node.callee;
+
+  node.arguments = node.arguments.map(function (x) {
+    return $traverseExpression(node, x, state, true);
+  });
+
+  var params = callee.params;
+
+  // TODO what if the arguments is shorter than the params ?
+  node.arguments.forEach(function (x, i) {
+    if (i < params.length) {
+      var param = params[i];
+
+      // TODO should this use var or let ?
+      // TODO should this call traverseStatement ?
+      // TODO should this call findFunctionDefinitions ?
+      state.block.push(variableDeclaration("var", param, x, x));
+
+    } else {
+      // TODO should this call traverseStatement ?
+      state.block.push(expressionStatement(x));
+    }
+  });
+
+  // TODO make this faster
+  params.forEach(function (x, i) {
+    if (i >= node.arguments.length) {
+      // TODO should this use var or let ?
+      // TODO should this call traverseStatement ?
+      // TODO should this call findFunctionDefinitions ?
+      state.block.push(variableDeclaration("var", x, null, x));
+    }
+  });
+
+  if (callee.body.body.length === 1 &&
+      callee.body.body[0].type === "ReturnStatement") {
+    return callee.body.body[0].argument;
+
+  } else {
+    var returnUnique = null;
+
+    function loop(parent, node, state) {
+      if (node.type === "ReturnStatement") {
+        if (returnUnique === null) {
+          returnUnique = defineUnique(state, "block")
+        }
+
+        return expressionStatement(assignmentExpression(returnUnique.identifier, node.argument, node));
+
+      } else if (isFunction(node)) {
+        return node;
 
       } else {
-        binding.uses.push(node);
+        walk(node, state, loop);
+        return node;
       }
     }
 
-  } else {
-    walk(node, state, traverseExpression);
+    callee.body = loop(callee, callee.body, state);
+
+    if (returnUnique !== null) {
+      // TODO should this use var or let ?
+      // TODO should this call traverseStatement ?
+      // TODO should this call findFunctionDefinitions ?
+      state.block.push(variableDeclaration("var", returnUnique.identifier, null, returnUnique.identifier));
+
+      // TODO use traverseStatement ?
+      callee.body.body.forEach(function (x) {
+        state.block.push(x);
+      });
+
+      return returnUnique.identifier;
+
+    } else {
+      // TODO use traverseStatement ?
+      callee.body.body.forEach(function (x) {
+        state.block.push(x);
+      });
+
+      return _void(node);
+    }
   }
 }
 
-
-function findFunctionDefinitions(parent, node, state) {
-  if (node.type === "Program" || node.type === "BlockStatement") {
-    node.body.forEach(function (x) {
-      findFunctionDefinitions(node, x, state);
-    });
-
-  } else if (node.type === "LabeledStatement") {
-    findFunctionDefinitions(node, node.body, state);
-
-  } else if (node.type === "IfStatement") {
-    findFunctionDefinitions(node, node.consequent, state);
-
-    if (node.alternate != null) {
-      findFunctionDefinitions(node, node.alternate, state);
-    }
-
-  } else if (node.type === "SwitchStatement") {
-    node.cases.forEach(function (node) {
-      node.consequent.forEach(function (x) {
-        findFunctionDefinitions(node, x, state);
-      });
-    });
-
-  } else if (node.type === "TryStatement") {
-    findFunctionDefinitions(node, node.block, state);
-
-    if (node.handler != null) {
-      findFunctionDefinitions(node, node.handler.body, state);
-    }
-
-    if (node.finalizer != null) {
-      findFunctionDefinitions(node, node.finalizer, state);
-    }
-
-  } else if (node.type === "WhileStatement" ||
-             node.type === "DoWhileStatement") {
-    findFunctionDefinitions(node, node.body, state);
-
-  } else if (node.type === "ForStatement") {
-    findFunctionDefinitions(node, node.init, state); // TODO is this correct ?
-    findFunctionDefinitions(node, node.body, state);
-
-  } else if (node.type === "ForInStatement") {
-    findFunctionDefinitions(node, node.left, state); // TODO is this correct ?
-    findFunctionDefinitions(node, node.body, state);
-
-  } else if (node.type === "VariableDeclaration" && node.kind === "var") {
-    node.declarations.forEach(function (x) {
-      walkPattern(x, x.id, state, function (parent, x, state) {
-        // TODO is this correct ?
-        defineIdentifier(state, "function", x);
-      });
-    });
-  }
-}
 
 
 function findBlockDefinitions(parent, node, state) {
@@ -428,14 +333,14 @@ function traverseStatement(parent, node, state) {
   } else if (node.type === "VariableDeclaration") {
     node.declarations.forEach(function (x) {
       if (x.init != null) {
-        traverseExpression(x, x.init, state);
+        x.init = $traverseExpression(x, x.init, state, false);
       }
 
       state.block.push(variableDeclaration(node.kind, x.id, x.init, x));
     });
 
   } else if (node.type === "ExpressionStatement") {
-    traverseExpression(node, node.expression, state);
+    node.expression = $traverseExpression(node, node.expression, state, false);
     state.block.push(node);
 
   } else if (node.type === "EmptyStatement") {
@@ -443,12 +348,12 @@ function traverseStatement(parent, node, state) {
 
   } else if (node.type === "ReturnStatement") {
     if (node.argument != null) {
-      traverseExpression(node, node.argument, state);
+      node.argument = $traverseExpression(node, node.argument, state, false);
     }
     state.block.push(node);
 
   } else if (node.type === "ThrowStatement") {
-    traverseExpression(node, node.argument, state);
+    node.argument = $traverseExpression(node, node.argument, state, false);
     state.block.push(node);
 
   } else if (node.type === "TryStatement") {
@@ -475,7 +380,7 @@ function traverseStatement(parent, node, state) {
     state.block.push(node);
 
   } else if (node.type === "IfStatement") {
-    traverseExpression(node, node.test, state);
+    node.test = $traverseExpression(node, node.test, state, false);
 
     node.consequent = makeBlockStatement(node.consequent);
     traverseBlock(node, node.consequent, state);
@@ -501,11 +406,12 @@ module.exports = function (code, filename) {
     sourceFile: filename
   });
 
+  var state = {};
+
+  $scope.state(state);
+
   // TODO maybe use traverseBlock instead ?
   traverseStatement(null, ast, {
-    globals: {},
-    varCounter: 0,
-    scopes: [],
     block: []
   });
 
