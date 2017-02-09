@@ -62,6 +62,79 @@ function expressionStatement(node) {
 }
 
 
+// TODO Import ?
+// TODO BindExpression ?
+// TODO TemplateLiteral ?
+// TODO TaggedTemplateExpression ?
+// TODO ClassExpression ?
+// TODO MetaProperty ?
+// TODO DirectiveLiteral ?
+function isPure(node) {
+      // TODO this is only needed for ArrayExpression
+  if (node === null ||
+      node.type === "Identifier" ||
+      // TODO is this correct ? what about inner classes ?
+      node.type === "Super" ||
+      // TODO is this correct ? what about inner functions ?
+      node.type === "ThisExpression" ||
+      node.type === "ArrowFunctionExpression" ||
+      node.type === "FunctionExpression" ||
+      // TODO this is technically impure
+      node.type === "RegExpLiteral" ||
+      node.type === "NullLiteral" ||
+      node.type === "StringLiteral" ||
+      node.type === "BooleanLiteral" ||
+      node.type === "NumericLiteral") {
+    return true;
+
+  } else if (node.type === "ArrayExpression") {
+    return node.elements.every(isPure);
+
+  } else if (node.type === "ObjectExpression") {
+    return node.properties.every(isPure);
+
+  } else if (node.type === "ObjectProperty" ||
+             node.type === "ObjectMethod") {
+    return isPure(node.key) && isPure(node.value);
+
+  } else if (node.type === "RestProperty" ||
+             node.type === "SpreadProperty" ||
+             node.type === "SpreadElement") {
+    return isPure(node.argument);
+
+  } else if (node.type === "UnaryExpression") {
+    return node.operator !== "delete" &&
+           isPure(node.argument);
+
+  } else if (node.type === "BinaryExpression" ||
+             node.type === "LogicalExpression") {
+    return isPure(node.left) && isPure(node.right);
+
+  } else if (node.type === "ConditionalExpression") {
+    return isPure(node.test) && isPure(node.alternate) && isPure(node.consequent);
+
+  } else if (node.type === "SequenceExpression") {
+    return node.expressions.every(isPure);
+
+             // TODO is this necessary ?
+  } else if (node.type === "YieldExpression" ||
+             // TODO is this necessary ?
+             node.type === "AwaitExpression" ||
+             node.type === "UpdateExpression" ||
+             node.type === "AssignmentExpression" ||
+             node.type === "CallExpression" ||
+             node.type === "NewExpression" ||
+             // TODO this is a little strict...
+             node.type === "MemberExpression") {
+    return false;
+
+  // TODO throw an error instead ?
+  } else {
+    return false;
+  }
+}
+
+
 module.exports = function (babel) {
   return {
     pre: function () {
@@ -113,27 +186,33 @@ module.exports = function (babel) {
 
             var length = node.arguments.length;
 
-            var uniques = [];
+            var replace = [];
 
             for (var i = 0; i < callee.params.length; ++i) {
               var param = callee.params[i];
 
-              // TODO guarantee that collisions cannot occur ?
-              var temp = $util.setLoc(path.scope.generateUidIdentifier(param.name), param);
+              if (i < length && isPure(node.arguments[i])) {
+                // TODO is this correct ?
+                replace.push(node.arguments[i]);
 
-              uniques.push(temp);
+              } else {
+                // TODO guarantee that collisions cannot occur ?
+                var temp = $util.setLoc(path.scope.generateUidIdentifier(param.name), param);
 
-              statements.push($util.setLoc({
-                type: "VariableDeclaration",
-                kind: "var",
-                declarations: [
-                  $util.setLoc({
-                    type: "VariableDeclarator",
-                    id: temp,
-                    init: (i < length ? node.arguments[i] : null)
-                  }, temp)
-                ]
-              }, temp));
+                replace.push(temp);
+
+                statements.push($util.setLoc({
+                  type: "VariableDeclaration",
+                  kind: "var",
+                  declarations: [
+                    $util.setLoc({
+                      type: "VariableDeclarator",
+                      id: temp,
+                      init: (i < length ? node.arguments[i] : null)
+                    }, temp)
+                  ]
+                }, temp));
+              }
             }
 
             for (var i = callee.params.length; i < length; ++i) {
@@ -146,7 +225,7 @@ module.exports = function (babel) {
 
             subPath.traverse(inlineVisitor, {
               params: params,
-              arguments: uniques
+              arguments: replace
             });
 
             // TODO path.replaceExpressionWithStatements();

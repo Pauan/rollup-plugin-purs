@@ -173,10 +173,19 @@ function main() {
       };
     }
 
+    function innerCurried3(a) {
+      return function (b) {
+        return function (c) {
+          return a + b + c;
+        };
+      };
+    }
+
     innerCurried2 = 50;
 
     console.log(innerCurried(1)(2));
     console.log(innerCurried2(1)(2));
+    console.log(innerCurried3(1)(qux = 2)(foo(3)));
   })();
 
   (function () {
