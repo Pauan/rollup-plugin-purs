@@ -104,6 +104,7 @@ function exportVar(state, body, path, identifier, expression, loc) {
     // TODO adjust the loc ?
     setExport(state, identifier.name, temp);
 
+    // TODO maybe use const ?
     // var temp = expression;
     body.push({
       type: "VariableDeclaration",
@@ -302,6 +303,7 @@ function transformCommonJS(babel) {
 
               setExport(state, "default", temp);
 
+              // TODO maybe use const ?
               // var temp = foo;
               body.push({
                 type: "VariableDeclaration",

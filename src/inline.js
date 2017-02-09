@@ -11,6 +11,7 @@ var checkVisitor = {
     if (node.callee.type === "Identifier") {
       var binding = path.scope.getBinding(node.callee.name);
 
+      // TODO check if the binding is constant ?
       if (binding != null) {
         // TODO handle aliasing
         if (state.seen.indexOf(binding) === -1) {
@@ -62,7 +63,7 @@ function canInline(path, node) {
 
 
 function makeInlined(binding, path, id, top) {
-  if (canInline(path, top)) {
+  if (binding.constant && canInline(path, top)) {
     var state = {
       function: false,
       recursive: false,

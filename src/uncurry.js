@@ -7,7 +7,7 @@ function makeUncurried(binding, path, id, top) {
   console.assert(path.node === top);
 
   // Only decurry 1-argument functions
-  if (top.params.length === 1) {
+  if (binding.constant && top.params.length === 1) {
     var params = [top.params];
 
     var x = top;
@@ -43,6 +43,7 @@ function makeUncurried(binding, path, id, top) {
       // TODO maybe this should set unique to true ?
       // TODO loc ?
       binding.scope.push({
+        kind: "const",
         id: temp,
         init: {
           type: "FunctionExpression",
@@ -67,6 +68,7 @@ function makeUncurried(binding, path, id, top) {
           // TODO is this loc correct ?
           loc: x.body.loc
         }],
+        directives: [],
         // TODO is this loc correct ?
         loc: x.body.loc
       };
@@ -179,7 +181,8 @@ module.exports = function (babel) {
                   body: [{
                     type: "ReturnStatement",
                     argument: body
-                  }]
+                  }],
+                  directives: []
                 }
               };
 

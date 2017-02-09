@@ -167,7 +167,16 @@ function main() {
       };
     }
 
+    function innerCurried2(a) {
+      return function (b) {
+        return a + b;
+      };
+    }
+
+    innerCurried2 = 50;
+
     console.log(innerCurried(1)(2));
+    console.log(innerCurried2(1)(2));
   })();
 
   (function () {

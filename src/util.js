@@ -1,6 +1,15 @@
 "use strict";
 
 
+exports.setLoc = function (a, b) {
+  // TODO is this correct ?
+  a.start = b.start;
+  a.end = b.end;
+  a.loc = b.loc;
+  return a;
+};
+
+
 exports.pushAll = function (a, b) {
   var length = b.length;
 

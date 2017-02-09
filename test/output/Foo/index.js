@@ -62,6 +62,12 @@ function inlined8(a, b, c) {
   }
 }
 
+function inlined9(a, b, c) {
+  return a + b + c;
+}
+
+inlined9 = 50;
+
 function inlinedSelf(a) {
   return a;
 }
@@ -97,6 +103,7 @@ console.log(inlined5(a, 2, 3));
 console.log(inlined6(a, 2, 3));
 console.log(inlined7(a, 2, 3));
 console.log(inlined8(a, 2, 3));
+console.log(inlined9(a, 2, 3));
 console.log((function (a) { return inlined1(a, 2, 3); })(1));
 console.log(inlined2(1, 2, 3));
 console.log(recursive(1, 2, 3));

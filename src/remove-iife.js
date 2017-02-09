@@ -1,5 +1,7 @@
 "use strict";
 
+var $util = require("./util");
+
 
 // TODO code duplication
 function canInlineParams(params) {
@@ -41,16 +43,23 @@ var inlineVisitor = {
       var index = state.params.indexOf(binding);
 
       if (index !== -1) {
-        if (index < state.arguments.length) {
-          path.replaceWith(state.arguments[index]);
-
-        } else {
-          path.replaceWith(_void);
-        }
+        console.assert(index < state.arguments.length);
+        path.replaceWith(state.arguments[index]);
       }
     }
   }
 };
+
+
+function expressionStatement(node) {
+  return {
+    type: "ExpressionStatement",
+    expression: node,
+    start: node.start,
+    end: node.end,
+    loc: node.loc
+  };
+}
 
 
 module.exports = function (babel) {
@@ -100,13 +109,49 @@ module.exports = function (babel) {
           if (canInlineFunction(callee) && canInlineParams(params)) {
             ++this.removed;
 
-            // TODO what about unused arguments ?
+            var statements = [];
+
+            var length = node.arguments.length;
+
+            var uniques = [];
+
+            for (var i = 0; i < callee.params.length; ++i) {
+              var param = callee.params[i];
+
+              // TODO guarantee that collisions cannot occur ?
+              var temp = $util.setLoc(path.scope.generateUidIdentifier(param.name), param);
+
+              uniques.push(temp);
+
+              statements.push($util.setLoc({
+                type: "VariableDeclaration",
+                kind: "var",
+                declarations: [
+                  $util.setLoc({
+                    type: "VariableDeclarator",
+                    id: temp,
+                    init: (i < length ? node.arguments[i] : null)
+                  }, temp)
+                ]
+              }, temp));
+            }
+
+            for (var i = callee.params.length; i < length; ++i) {
+              var arg = node.arguments[i];
+
+              statements.push(expressionStatement(arg));
+            }
+
+            statements.push(expressionStatement(callee.body.body[0].argument));
+
             subPath.traverse(inlineVisitor, {
               params: params,
-              arguments: node.arguments
+              arguments: uniques
             });
 
-            path.replaceWith(callee.body.body[0].argument);
+            // TODO path.replaceExpressionWithStatements();
+
+            path.replaceWithMultiple(statements);
 
           } else {
             ++this.unremoved;

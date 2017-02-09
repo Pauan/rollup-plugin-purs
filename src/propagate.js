@@ -129,6 +129,7 @@ module.exports = function (babel) {
             // Don't replace it if the new identifier is shadowed
             if (replace.type === "Identifier" &&
                 // TODO better check for this ?
+                // TODO what about checking whether the binding is constant or not ?
                 path.scope.getBinding(replace.name) !== binding.scope.getBinding(replace.name)) {
               // TODO loc
               // TODO replace with _this.warn (https://github.com/rollup/rollup/issues/1282)
