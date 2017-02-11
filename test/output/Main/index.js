@@ -1,4 +1,5 @@
 var foo = require("../Foo");
+require("../Typeclass");
 
 function main() {
   console.log(foo.null);

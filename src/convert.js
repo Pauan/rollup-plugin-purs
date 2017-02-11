@@ -185,6 +185,14 @@ function replaceExport(state, name) {
 }
 
 
+function isRequireCall(path, node) {
+  return node.type === "CallExpression" &&
+         isUndefinedIdentifier(path, node.callee, "require") &&
+         node.arguments.length === 1 &&
+         node.arguments[0].type === "StringLiteral";
+}
+
+
 function transformCommonJS(babel) {
   return {
     pre: function () {
@@ -207,10 +215,7 @@ function transformCommonJS(babel) {
               // var foo = require("bar");
               if (x.id.type === "Identifier" &&
                   x.init !== null &&
-                  x.init.type === "CallExpression" &&
-                  isUndefinedIdentifier(path, x.init.callee, "require") &&
-                  x.init.arguments.length === 1 &&
-                  x.init.arguments[0].type === "StringLiteral") {
+                  isRequireCall(path, x.init)) {
                 var file = x.init.arguments[0];
 
                 state.imports[x.id.name] = file;
@@ -242,6 +247,19 @@ function transformCommonJS(babel) {
                      x.expression.type === "StringLiteral" &&
                      x.expression.value === "use strict") {
             // Do nothing
+
+          // require("foo");
+          } else if (x.type === "ExpressionStatement" &&
+                     isRequireCall(path, x.expression)) {
+            var file = x.expression.arguments[0];
+
+            body.push({
+              type: "ImportDeclaration",
+              specifiers: [],
+              source: file,
+              // TODO if there is only one assignment, use the source map for the whole declaration
+              loc: x.loc
+            });
 
           } else if (x.type === "ExpressionStatement" &&
                      x.expression.type === "AssignmentExpression" &&

@@ -13,9 +13,7 @@ function canInlineParams(params) {
 
 // TODO code duplication
 function canInlineFunction(node) {
-  // TODO allow for the id, as long as it's not called ?
-  return node.id === null &&
-         node.body.body.length === 1 &&
+  return node.body.body.length === 1 &&
          node.body.body[0].type === "ReturnStatement";
 }
 
@@ -179,7 +177,8 @@ module.exports = function (babel) {
             }
           });
 
-          if (canInlineFunction(callee) && canInlineParams(params)) {
+          // TODO allow for the id, as long as it's not called ?
+          if (callee.id === null && canInlineFunction(callee) && canInlineParams(params)) {
             ++this.removed;
 
             var statements = [];
