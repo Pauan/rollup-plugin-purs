@@ -72,3 +72,19 @@ exports.withFunctionDefinition = function (binding, fn) {
     //console.warn("Unknown type: " + definition.type);
   }
 };
+
+
+exports.getPropertyName = function (node) {
+  if (node.computed) {
+    // node["foo"]
+    if (node.property.type === "StringLiteral") {
+      return node.property.value;
+    }
+
+  // node.foo
+  } else if (node.property.type === "Identifier") {
+    return node.property.name;
+  }
+
+  return null;
+};

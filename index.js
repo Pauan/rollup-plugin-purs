@@ -12,6 +12,7 @@ var $rename = require("./src/rename");
 var $propagate = require("./src/propagate");
 var $removeSequence = require("./src/remove-sequence");
 var $removeIIFE = require("./src/remove-iife");
+var $typeclass = require("./src/typeclass");
 
 
 function pursPath(options, path) {
@@ -231,12 +232,13 @@ module.exports = function (options) {
       // TODO better way of handling this ?
       plugins.push($propagate);
 
-      if (options.optimizations.uncurry) {
-        plugins.push([$uncurry, { debug: options.debug }]);
-      }
-
       if (options.optimizations.inline) {
         plugins.push([$inline, { debug: options.debug }]);
+        plugins.push([$typeclass, { debug: options.debug }]);
+      }
+
+      if (options.optimizations.uncurry) {
+        plugins.push([$uncurry, { debug: options.debug }]);
       }
 
       plugins.push([$removeIIFE, { debug: options.debug }]);

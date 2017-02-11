@@ -73,7 +73,7 @@ function makeUncurried(binding, path, id, top) {
         loc: x.body.loc
       };
 
-      path.visit();
+      path.get("body").visit();
     }
   }
 }
@@ -123,102 +123,105 @@ module.exports = function (babel) {
     },
     visitor: {
       // TODO what about NewExpression ?
-      CallExpression: function (path, state) {
-        var node = path.node;
+      CallExpression: {
+        exit: function (path, state) {
+          var node = path.node;
 
-        var args = [];
+          var args = [node.arguments];
 
-        while (node.type === "CallExpression") {
-          args.push(node.arguments);
-          node = node.callee;
-        }
+          var top = path;
 
-        var uncurried = getUncurriedCall(path, node);
-
-        if (uncurried != null) {
-          args.reverse();
-
-          var flattened = [];
-
-          var body = {
-            type: "CallExpression",
-            callee: uncurried.uid,
-            arguments: flattened
-          };
-
-          if (args.length >= uncurried.params.length) {
-            ++state.uncurriedSaturated;
-
-            for (var i = uncurried.params.length - 1; i >= 0; --i) {
-              $util.pushAll(flattened, args[i]);
-            }
-
-            for (var i = uncurried.params.length; i < args.length; ++i) {
-              body = {
-                type: "CallExpression",
-                callee: body,
-                arguments: args[i]
-              };
-            }
-
-          } else {
-            ++state.uncurriedUnsaturated;
-
-            // TODO remove this later
-            var created = false;
-
-            for (var i = uncurried.params.length - 1; i >= args.length; --i) {
-              // TODO make a copy of the params ?
-              $util.pushAll(flattened, uncurried.params[i]);
-
-              body = {
-                type: "FunctionExpression",
-                id: null,
-                // TODO make a copy of the params ?
-                params: uncurried.params[i],
-                body: {
-                  type: "BlockStatement",
-                  body: [{
-                    type: "ReturnStatement",
-                    argument: body
-                  }],
-                  directives: []
-                }
-              };
-
-              created = true;
-            }
-
-            console.assert(created === true);
-
-            for (var i = args.length - 1; i >= 0; --i) {
-              $util.pushAll(flattened, args[i]);
-            }
+          while (top.parentPath.node.type === "CallExpression" &&
+                 top.parentPath.node.callee === top.node) {
+            top = top.parentPath;
+            args.push(top.node.arguments);
           }
 
-          flattened.reverse();
+          var uncurried = getUncurriedCall(path, node.callee);
 
-          path.replaceWith(body);
+          if (uncurried != null) {
+            var flattened = [];
 
-        } else {
-          var curried = 0;
+            var body = {
+              type: "CallExpression",
+              callee: uncurried.uid,
+              arguments: flattened
+            };
 
-          for (var i = 0; i < args.length; ++i) {
-            // Curried functions always take a single argument
-            if (args[i].length === 1) {
-              ++curried;
+            if (args.length >= uncurried.params.length) {
+              ++state.uncurriedSaturated;
+
+              for (var i = uncurried.params.length - 1; i >= 0; --i) {
+                $util.pushAll(flattened, args[i]);
+              }
+
+              for (var i = uncurried.params.length; i < args.length; ++i) {
+                body = {
+                  type: "CallExpression",
+                  callee: body,
+                  arguments: args[i]
+                };
+              }
 
             } else {
-              break;
-            }
-          }
+              ++state.uncurriedUnsaturated;
 
-          // TODO is this check correct ?
-          if (args.length > 1 && curried > 0) {
-            ++state.curried;
+              // TODO remove this later
+              var created = false;
+
+              for (var i = uncurried.params.length - 1; i >= args.length; --i) {
+                // TODO make a copy of the params ?
+                $util.pushAll(flattened, uncurried.params[i]);
+
+                body = {
+                  type: "FunctionExpression",
+                  id: null,
+                  // TODO make a copy of the params ?
+                  params: uncurried.params[i],
+                  body: {
+                    type: "BlockStatement",
+                    body: [{
+                      type: "ReturnStatement",
+                      argument: body
+                    }],
+                    directives: []
+                  }
+                };
+
+                created = true;
+              }
+
+              console.assert(created === true);
+
+              for (var i = args.length - 1; i >= 0; --i) {
+                $util.pushAll(flattened, args[i]);
+              }
+            }
+
+            flattened.reverse();
+
+            top.replaceWith(body);
 
           } else {
-            ++state.regular;
+            var curried = 0;
+
+            for (var i = 0; i < args.length; ++i) {
+              // Curried functions always take a single argument
+              if (args[i].length === 1) {
+                ++curried;
+
+              } else {
+                break;
+              }
+            }
+
+            // TODO is this check correct ?
+            if (args.length > 1 && curried > 0) {
+              ++state.curried;
+
+            } else {
+              ++state.regular;
+            }
           }
         }
       }

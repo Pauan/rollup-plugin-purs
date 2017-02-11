@@ -6,3 +6,5 @@ var Data_Maybe = require("../Data.Maybe");
 var Data_Semiring = require("../Data.Semiring");
 
 console.log(Control_Apply.apply(Data_Maybe.applyMaybe)(Data_Functor.map(Data_Maybe.functorMaybe)(Data_Semiring.add(Data_Semiring.semiringInt))(new Data_Maybe.Just(1)))(new Data_Maybe.Just(2)));
+
+console.log(Data_Maybe.applyMaybe.apply(Data_Maybe.functorMaybe.map(Data_Semiring.semiringInt.add)(new Data_Maybe.Just(1)))(new Data_Maybe.Just(2)));

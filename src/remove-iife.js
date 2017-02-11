@@ -220,16 +220,22 @@ module.exports = function (babel) {
               statements.push(expressionStatement(arg));
             }
 
-            statements.push(expressionStatement(callee.body.body[0].argument));
+            var expression = callee.body.body[0].argument;
 
             subPath.traverse(inlineVisitor, {
               params: params,
               arguments: replace
             });
 
-            // TODO path.replaceExpressionWithStatements();
+            // TODO path.replaceExpressionWithStatements(); ?
 
-            path.replaceWithMultiple(statements);
+            if (statements.length === 0) {
+              path.replaceWith(expression);
+
+            } else {
+              statements.push(expressionStatement(expression));
+              path.replaceWithMultiple(statements);
+            }
 
           } else {
             ++this.unremoved;
