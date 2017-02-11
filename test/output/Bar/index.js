@@ -217,3 +217,30 @@ function main() {
   console.log(innerCurried2(1)(2));
   console.log("nou", curriedFn(1), curriedFn(1)(2), curriedFn(1)(2)(3), curriedFn(1)(2)(3, 4), curriedFn(1)(2)(3, 4)());
 }
+
+
+
+var $$const = function (a) {
+    return function (v) {
+        return a;
+    };
+};
+
+var maybe = function (v) {
+    return function (v1) {
+        return function (v2) {
+            if (v2 instanceof Nothing) {
+                return v;
+            };
+            if (v2 instanceof Just) {
+                return v1(v2.value0);
+            };
+            throw new Error("Failed pattern match at Data.Maybe line 214, column 1 - line 214, column 22: " + [ v.constructor.name, v1.constructor.name, v2.constructor.name ]);
+        };
+    };
+};
+
+var isNothing = maybe(true)($$const(false));
+var isJust = maybe(false)($$const(true));
+
+console.log(isNothing, isJust);

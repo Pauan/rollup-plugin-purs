@@ -83,7 +83,9 @@ These are the optimizations which can be turned on or off:
 
 * `inline`
 
-  Inline some functions, which can increase performance and decrease the file size. It also inlines typeclass instance methods when it can.
+  Inline some functions, which can increase performance and decrease the file size.
+
+  It also inlines typeclass instance methods when it can.
 
 In addition to the uncurrying and inlining optimizations, there are some optimizations which are *always* applied:
 

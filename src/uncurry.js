@@ -127,19 +127,20 @@ module.exports = function (babel) {
         exit: function (path, state) {
           var node = path.node;
 
-          var args = [node.arguments];
-
-          var top = path;
-
-          while (top.parentPath.node.type === "CallExpression" &&
-                 top.parentPath.node.callee === top.node) {
-            top = top.parentPath;
-            args.push(top.node.arguments);
-          }
-
           var uncurried = getUncurriedCall(path, node.callee);
 
           if (uncurried != null) {
+            var args = [node.arguments];
+
+            /*var top = path;
+
+            while (top.parentPath.node.type === "CallExpression" &&
+                   top.parentPath.node.callee === top.node &&
+                   args.length < uncurried.params.length) {
+              top = top.parentPath;
+              args.push(top.node.arguments);
+            }*/
+
             var flattened = [];
 
             var body = {
@@ -200,28 +201,7 @@ module.exports = function (babel) {
 
             flattened.reverse();
 
-            top.replaceWith(body);
-
-          } else {
-            var curried = 0;
-
-            for (var i = 0; i < args.length; ++i) {
-              // Curried functions always take a single argument
-              if (args[i].length === 1) {
-                ++curried;
-
-              } else {
-                break;
-              }
-            }
-
-            // TODO is this check correct ?
-            if (args.length > 1 && curried > 0) {
-              ++state.curried;
-
-            } else {
-              ++state.regular;
-            }
+            path.replaceWith(body);
           }
         }
       }

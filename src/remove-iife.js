@@ -149,96 +149,106 @@ module.exports = function (babel) {
       }
     },
     visitor: {
-      CallExpression: function (path, state) {
-        var node = path.node;
+      CallExpression: {
+        exit: function (path, state) {
+          var node = path.node;
 
-        var callee = node.callee;
+          var callee = node.callee;
 
-        if (callee.type === "FunctionExpression") {
-          // TODO is this correct ?
-          var subPath = path.get("callee");
+          if (callee.type === "FunctionExpression") {
+            // TODO is this correct ?
+            var subPath = path.get("callee");
 
-          var params = callee.params.map(function (x) {
-            if (x.type === "Identifier") {
-              var binding = subPath.scope.getBinding(x.name);
+            var params = callee.params.map(function (x) {
+              if (x.type === "Identifier") {
+                var binding = subPath.scope.getBinding(x.name);
 
-              console.assert(binding != null);
+                console.assert(binding != null);
 
-              // Only inline if each argument is used at most once
-              if (binding.constant && binding.references <= 1) {
-                return binding;
+                // Only inline if each argument is used at most once
+                if (binding.constant && binding.references <= 1) {
+                  return binding;
+
+                } else {
+                  return null;
+                }
 
               } else {
                 return null;
               }
-
-            } else {
-              return null;
-            }
-          });
-
-          // TODO allow for the id, as long as it's not called ?
-          if (callee.id === null && canInlineFunction(callee) && canInlineParams(params)) {
-            ++this.removed;
-
-            var statements = [];
-
-            var length = node.arguments.length;
-
-            var replace = [];
-
-            for (var i = 0; i < callee.params.length; ++i) {
-              var param = callee.params[i];
-
-              if (i < length && isPure(node.arguments[i])) {
-                // TODO is this correct ?
-                replace.push(node.arguments[i]);
-
-              } else {
-                // TODO guarantee that collisions cannot occur ?
-                var temp = $util.setLoc(path.scope.generateUidIdentifier(param.name), param);
-
-                replace.push(temp);
-
-                statements.push($util.setLoc({
-                  type: "VariableDeclaration",
-                  kind: "var",
-                  declarations: [
-                    $util.setLoc({
-                      type: "VariableDeclarator",
-                      id: temp,
-                      init: (i < length ? node.arguments[i] : null)
-                    }, temp)
-                  ]
-                }, temp));
-              }
-            }
-
-            for (var i = callee.params.length; i < length; ++i) {
-              var arg = node.arguments[i];
-
-              statements.push(expressionStatement(arg));
-            }
-
-            var expression = callee.body.body[0].argument;
-
-            subPath.traverse(inlineVisitor, {
-              params: params,
-              arguments: replace
             });
 
-            // TODO path.replaceExpressionWithStatements(); ?
+            // TODO allow for the id, as long as it's not called ?
+            if (callee.id === null && canInlineFunction(callee) && canInlineParams(params)) {
+              ++this.removed;
 
-            if (statements.length === 0) {
-              path.replaceWith(expression);
+              var statements = [];
+
+              var length = node.arguments.length;
+
+              var replace = [];
+
+              for (var i = 0; i < callee.params.length; ++i) {
+                var param = callee.params[i];
+
+                if (i < length) {
+                  // TODO is this correct ?
+                  replace.push(node.arguments[i]);
+
+                } else {
+                  replace.push(_void);
+                }
+
+                /*if (i < length && isPure(node.arguments[i])) {
+                  // TODO is this correct ?
+                  replace.push(node.arguments[i]);
+
+                } else {
+                  // TODO guarantee that collisions cannot occur ?
+                  var temp = $util.setLoc(path.scope.generateUidIdentifier(param.name), param);
+
+                  replace.push(temp);
+
+                  statements.push($util.setLoc({
+                    type: "VariableDeclaration",
+                    kind: "var",
+                    declarations: [
+                      $util.setLoc({
+                        type: "VariableDeclarator",
+                        id: temp,
+                        init: (i < length ? node.arguments[i] : null)
+                      }, temp)
+                    ]
+                  }, temp));
+                }*/
+              }
+
+              for (var i = callee.params.length; i < length; ++i) {
+                var arg = node.arguments[i];
+
+                statements.push(expressionStatement(arg));
+              }
+
+              var expression = callee.body.body[0].argument;
+
+              subPath.traverse(inlineVisitor, {
+                params: params,
+                arguments: replace
+              });
+
+              // TODO path.replaceExpressionWithStatements(); ?
+
+              if (statements.length === 0) {
+                path.replaceWith(expression);
+
+              } else {
+                statements.push(expressionStatement(expression));
+                path.replaceWithMultiple(statements);
+              }
 
             } else {
-              statements.push(expressionStatement(expression));
-              path.replaceWithMultiple(statements);
+              ++this.unremoved;
             }
-
-          } else {
-            ++this.unremoved;
           }
         }
       }
