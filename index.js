@@ -36,16 +36,32 @@ module.exports = function (options) {
     options.runMain = true;
   }
 
-  if (options.uncurry == null) {
-    options.uncurry = true;
-  }
-
-  if (options.inline == null) {
-    options.inline = true;
-  }
-
   if (options.debug == null) {
     options.debug = false;
+  }
+
+  if (options.optimizations == null) {
+    options.optimizations = {};
+  }
+
+  // TODO remove this in 2.0.0
+  if (options.uncurry != null) {
+    console.warn("rollup-plugin-purs: uncurry option is deprecated, use optimizations.uncurry instead");
+    options.optimizations.uncurry = options.uncurry;
+  }
+
+  // TODO remove this in 2.0.0
+  if (options.inline != null) {
+    console.warn("rollup-plugin-purs: inline option is deprecated, use optimizations.inline instead");
+    options.optimizations.inline = options.inline;
+  }
+
+  if (options.optimizations.uncurry == null) {
+    options.optimizations.uncurry = true;
+  }
+
+  if (options.optimizations.inline == null) {
+    options.optimizations.inline = true;
   }
 
   var filter = $utils.createFilter(options.include, options.exclude);
@@ -215,11 +231,11 @@ module.exports = function (options) {
       // TODO better way of handling this ?
       plugins.push($propagate);
 
-      if (options.uncurry) {
+      if (options.optimizations.uncurry) {
         plugins.push([$uncurry, { debug: options.debug }]);
       }
 
-      if (options.inline) {
+      if (options.optimizations.inline) {
         plugins.push([$inline, { debug: options.debug }]);
       }
 

@@ -8,9 +8,11 @@ export default {
   treeshake: true,
   plugins: [
     purs({
-      inline: true,
-      uncurry: true,
-      debug: true
+      debug: true,
+      optimizations: {
+        inline: true,
+        uncurry: true
+      }
     })
   ]
 };
