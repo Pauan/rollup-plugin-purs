@@ -93,16 +93,17 @@ function makeTypeclass(state, binding, path, node) {
 
           replace.params.forEach(function (x, i) {
             // TODO loc
-            // TODO replace with path.scope.insertBefore ?
-            path.scope.push({
-              kind: "const",
+            path.insertBefore([{
+              type: "VariableDeclarator",
               id: x,
               init: args[i],
-              unique: true
-            });
+            }]);
 
             args[i] = x;
           });
+
+          // TODO is this correct ?
+          path.scope.registerDeclaration(path.parentPath);
 
           binding.rollup_plugin_purs_typeclass = replace.members;
         }
