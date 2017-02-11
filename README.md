@@ -75,6 +75,16 @@ The comments must be exactly the same as above, and they must be placed at the t
 
 ## Optimizations
 
+These are the optimizations which can be turned on or off:
+
+* `uncurry`
+
+  Replace curried functions with uncurried functions, for improved performance and smaller file size
+
+* `inline`
+
+  Inline some functions, which can increase performance and decrease the file size. It also inlines typeclass instance methods when it can.
+
 In addition to the uncurrying and inlining optimizations, there are some optimizations which are *always* applied:
 
 * Dead code elimination
@@ -83,8 +93,6 @@ In addition to the uncurrying and inlining optimizations, there are some optimiz
 
 
 ## Planned optimizations
-
-* Typeclass instance inlining
 
 * Common subexpression elimination
 
