@@ -103,6 +103,33 @@ function getUncurriedCall(path, node) {
 }
 
 
+function pushAll(path, statements, flattened, a) {
+  a.forEach(function (x) {
+    if ($util.isPure(x)) {
+      flattened.push(x);
+
+    } else {
+      // TODO guarantee that collisions cannot occur ?
+      var temp = $util.setLoc(path.scope.generateUidIdentifier(), x);
+
+      flattened.push(temp);
+
+      statements.push($util.setLoc({
+        type: "VariableDeclaration",
+        kind: "var",
+        declarations: [
+          $util.setLoc({
+            type: "VariableDeclarator",
+            id: temp,
+            init: x
+          }, temp)
+        ]
+      }, temp));
+    }
+  });
+}
+
+
 module.exports = function (babel) {
   return {
     pre: function () {
@@ -146,6 +173,8 @@ module.exports = function (babel) {
 
               var flattened = [];
 
+              var statements = [];
+
               var body = {
                 type: "CallExpression",
                 callee: uncurried.uid,
@@ -153,9 +182,12 @@ module.exports = function (babel) {
               };
 
               if (args.length >= uncurried.params.length) {
-                ++state.uncurriedSaturated;
-
                 for (var i = uncurried.params.length - 1; i >= 0; --i) {
+                  if (uncurried.params[i].length !== args[i].length) {
+                    ++state.curried;
+                    return;
+                  }
+
                   $util.pushAll(flattened, args[i]);
                 }
 
@@ -167,15 +199,15 @@ module.exports = function (babel) {
                   };
                 }
 
-              } else {
-                ++state.uncurriedUnsaturated;
+                ++state.uncurriedSaturated;
 
+              } else {
                 // TODO remove this later
                 var created = false;
 
                 for (var i = uncurried.params.length - 1; i >= args.length; --i) {
                   // TODO make a copy of the params ?
-                  $util.pushAll(flattened, uncurried.params[i]);
+                  pushAll(path, statements, flattened, uncurried.params[i]);
 
                   body = {
                     type: "FunctionExpression",
@@ -198,13 +230,27 @@ module.exports = function (babel) {
                 console.assert(created === true);
 
                 for (var i = args.length - 1; i >= 0; --i) {
-                  $util.pushAll(flattened, args[i]);
+                  if (uncurried.params[i].length !== args[i].length) {
+                    ++state.curried;
+                    return;
+                  }
+
+                  pushAll(path, statements, flattened, args[i]);
                 }
+
+                ++state.uncurriedUnsaturated;
               }
 
               flattened.reverse();
 
-              path.replaceWith(body);
+              if (statements.length === 0) {
+                path.replaceWith(body);
+
+              } else {
+                // TODO is this correct ?
+                statements.push($util.expressionStatement(body));
+                path.replaceWithMultiple(statements);
+              }
 
             } else {
               var curried = 0;

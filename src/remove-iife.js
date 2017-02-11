@@ -49,90 +49,6 @@ var inlineVisitor = {
 };
 
 
-function expressionStatement(node) {
-  return {
-    type: "ExpressionStatement",
-    expression: node,
-    start: node.start,
-    end: node.end,
-    loc: node.loc
-  };
-}
-
-
-// TODO Import ?
-// TODO BindExpression ?
-// TODO TemplateLiteral ?
-// TODO TaggedTemplateExpression ?
-// TODO ClassExpression ?
-// TODO MetaProperty ?
-// TODO DirectiveLiteral ?
-function isPure(node) {
-      // TODO this is only needed for ArrayExpression
-  if (node === null ||
-      node.type === "Identifier" ||
-      // TODO is this correct ? what about inner classes ?
-      node.type === "Super" ||
-      // TODO is this correct ? what about inner functions ?
-      node.type === "ThisExpression" ||
-      node.type === "ArrowFunctionExpression" ||
-      node.type === "FunctionExpression" ||
-      // TODO this is technically impure
-      node.type === "RegExpLiteral" ||
-      node.type === "NullLiteral" ||
-      node.type === "StringLiteral" ||
-      node.type === "BooleanLiteral" ||
-      node.type === "NumericLiteral") {
-    return true;
-
-  } else if (node.type === "ArrayExpression") {
-    return node.elements.every(isPure);
-
-  } else if (node.type === "ObjectExpression") {
-    return node.properties.every(isPure);
-
-  } else if (node.type === "ObjectProperty" ||
-             node.type === "ObjectMethod") {
-    return isPure(node.key) && isPure(node.value);
-
-  } else if (node.type === "RestProperty" ||
-             node.type === "SpreadProperty" ||
-             node.type === "SpreadElement") {
-    return isPure(node.argument);
-
-  } else if (node.type === "UnaryExpression") {
-    return node.operator !== "delete" &&
-           isPure(node.argument);
-
-  } else if (node.type === "BinaryExpression" ||
-             node.type === "LogicalExpression") {
-    return isPure(node.left) && isPure(node.right);
-
-  } else if (node.type === "ConditionalExpression") {
-    return isPure(node.test) && isPure(node.alternate) && isPure(node.consequent);
-
-  } else if (node.type === "SequenceExpression") {
-    return node.expressions.every(isPure);
-
-             // TODO is this necessary ?
-  } else if (node.type === "YieldExpression" ||
-             // TODO is this necessary ?
-             node.type === "AwaitExpression" ||
-             node.type === "UpdateExpression" ||
-             node.type === "AssignmentExpression" ||
-             node.type === "CallExpression" ||
-             node.type === "NewExpression" ||
-             // TODO this is a little strict...
-             node.type === "MemberExpression") {
-    return false;
-
-  // TODO throw an error instead ?
-  } else {
-    return false;
-  }
-}
-
-
 module.exports = function (babel) {
   return {
     pre: function () {
@@ -191,7 +107,7 @@ module.exports = function (babel) {
               for (var i = 0; i < callee.params.length; ++i) {
                 var param = callee.params[i];
 
-                if (i < length && isPure(node.arguments[i])) {
+                if (i < length && $util.isPure(node.arguments[i])) {
                   // TODO is this correct ?
                   replace.push(node.arguments[i]);
 
@@ -218,7 +134,7 @@ module.exports = function (babel) {
               for (var i = callee.params.length; i < length; ++i) {
                 var arg = node.arguments[i];
 
-                statements.push(expressionStatement(arg));
+                statements.push($util.expressionStatement(arg));
               }
 
               subPath.traverse(inlineVisitor, {
@@ -234,7 +150,7 @@ module.exports = function (babel) {
                 path.replaceWith(expression);
 
               } else {
-                statements.push(expressionStatement(expression));
+                statements.push($util.expressionStatement(expression));
                 path.replaceWithMultiple(statements);
               }
 

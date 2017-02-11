@@ -9,3 +9,25 @@ function main() {
 module.exports = {
   main: main
 };
+
+
+function add(x) {
+  return function (y) {
+    return x + y;
+  };
+}
+
+console.log(add(effect(1))(effect(2)));
+
+
+var get = function (mutable) {
+  return function (state) {
+    return mutable.snapshot.value;
+  };
+};
+
+console.log(get(effect(group.tabs), 1));
+
+console.log(get(effect(group.tabs))(1));
+
+console.log(get(effect(group.tabs)));
