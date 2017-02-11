@@ -93,10 +93,12 @@ function makeTypeclass(state, binding, path, node) {
 
           replace.params.forEach(function (x, i) {
             // TODO loc
-            // TODO replace with path.scope.insertBefore
+            // TODO replace with path.scope.insertBefore ?
             path.scope.push({
+              kind: "const",
               id: x,
-              init: args[i]
+              init: args[i],
+              unique: true
             });
 
             args[i] = x;

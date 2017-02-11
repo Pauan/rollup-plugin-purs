@@ -8,3 +8,148 @@ var Data_Semiring = require("../Data.Semiring");
 console.log(Control_Apply.apply(Data_Maybe.applyMaybe)(Data_Functor.map(Data_Maybe.functorMaybe)(Data_Semiring.add(Data_Semiring.semiringInt))(new Data_Maybe.Just(1)))(new Data_Maybe.Just(2)));
 
 console.log(Data_Maybe.applyMaybe.apply(Data_Maybe.functorMaybe.map(Data_Semiring.semiringInt.add)(new Data_Maybe.Just(1)))(new Data_Maybe.Just(2)));
+
+
+var mapImpl = function (f) {
+  return function (view) {
+    var oldSnapshot = null;
+    var parentSnapshot = null;
+
+    return {
+      snapshot: function () {
+        var newSnapshot = view.snapshot();
+
+        if (oldSnapshot === null ||
+            (parentSnapshot.id !== newSnapshot.id &&
+             // TODO is this optimization okay ?
+             parentSnapshot.value !== newSnapshot.value)) {
+
+          parentSnapshot = newSnapshot;
+
+          oldSnapshot = {
+            id: newSnapshot.id,
+            value: f(newSnapshot.value)
+          };
+        }
+
+        return oldSnapshot;
+      },
+      subscribe: view.subscribe
+    };
+  };
+};
+
+
+// TODO test this
+// TODO verify that this follows the Apply laws
+var applyImpl = function (view1) {
+  return function (view2) {
+    var oldId = 0;
+    var oldSnapshot = null;
+
+    var oldSnapshot1 = null;
+    var oldSnapshot2 = null;
+
+    return {
+      snapshot: function () {
+        var newSnapshot1 = view1.snapshot();
+        var newSnapshot2 = view2.snapshot();
+
+        if (oldSnapshot === null ||
+
+            (oldSnapshot1.id !== newSnapshot1.id &&
+             // TODO is this optimization okay ?
+             oldSnapshot1.value !== newSnapshot1.value) ||
+
+            (oldSnapshot2.id !== newSnapshot2.id &&
+             // TODO is this optimization okay ?
+             oldSnapshot2.value !== newSnapshot2.value)) {
+
+          oldSnapshot1 = newSnapshot1;
+          oldSnapshot2 = newSnapshot2;
+
+          oldSnapshot = {
+            id: oldId,
+            // TODO don't push if the new value is the same as the old value ?
+            // TODO what if this throws an exception ?
+            value: newSnapshot1.value(newSnapshot2.value)
+          };
+
+          ++oldId;
+        }
+
+        return oldSnapshot;
+      },
+      subscribe: function (push) {
+        var cleanup1 = view1.subscribe(push);
+        var cleanup2 = view2.subscribe(push);
+
+        return function () {
+          cleanup1();
+          return cleanup2();
+        };
+      }
+    };
+  };
+};
+
+var pureImpl = function (unit) {
+  function noop() {
+    return unit;
+  }
+
+  function noopSubscribe(push) {
+    return noop;
+  }
+
+  return function (a) {
+    var snapshot = {
+      id: 0,
+      value: a
+    };
+
+    return {
+      snapshot: function () {
+        return snapshot;
+      },
+      subscribe: noopSubscribe
+    };
+  };
+};
+
+
+var unit = {};
+
+
+var Functor = function (map) {
+    this.map = map;
+};
+
+var functorView = new Functor(mapImpl);
+
+
+var Apply = function (__superclass_Data$dotFunctor$dotFunctor_0, apply) {
+    this["__superclass_Data.Functor.Functor_0"] = __superclass_Data$dotFunctor$dotFunctor_0;
+    this.apply = apply;
+};
+
+var applyView = new Apply(function () {
+    return functorView;
+}, applyImpl);
+
+
+var Applicative = function (__superclass_Control$dotApply$dotApply_0, pure) {
+    this["__superclass_Control.Apply.Apply_0"] = __superclass_Control$dotApply$dotApply_0;
+    this.pure = pure;
+};
+
+var applicativeView = new Applicative(function () {
+    return applyView;
+}, pureImpl(unit));
+
+
+var pure = function (dict) {
+    return dict.pure;
+};
+
+console.log(pure(applicativeView)(true));

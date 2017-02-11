@@ -51,7 +51,8 @@ function makeUncurried(binding, path, id, top) {
           params: flattened,
           body: x.body,
           loc: top.loc
-        }
+        },
+        unique: true
       });
 
       x.body = {
