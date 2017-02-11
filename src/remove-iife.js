@@ -191,15 +191,7 @@ module.exports = function (babel) {
               for (var i = 0; i < callee.params.length; ++i) {
                 var param = callee.params[i];
 
-                if (i < length) {
-                  // TODO is this correct ?
-                  replace.push(node.arguments[i]);
-
-                } else {
-                  replace.push(_void);
-                }
-
-                /*if (i < length && isPure(node.arguments[i])) {
+                if (i < length && isPure(node.arguments[i])) {
                   // TODO is this correct ?
                   replace.push(node.arguments[i]);
 
@@ -220,7 +212,7 @@ module.exports = function (babel) {
                       }, temp)
                     ]
                   }, temp));
-                }*/
+                }
               }
 
               for (var i = callee.params.length; i < length; ++i) {
