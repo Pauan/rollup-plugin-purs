@@ -153,3 +153,30 @@ var pure = function (dict) {
 };
 
 console.log(pure(applicativeView)(true));
+
+
+
+var pureImpl2 = function (value) {
+  return function (state) {
+    return value;
+  };
+};
+
+var functorTransaction = new Functor(__mapImpl);
+var applyTransaction = new Apply(function () {
+    return functorTransaction;
+}, __applyImpl);
+var bindTransaction = new Bind(function () {
+    return applyTransaction;
+}, __bindImpl);
+var applicativeTransaction = new Applicative(function () {
+    return applyTransaction;
+}, pureImpl2);
+
+console.log(pure(applicativeTransaction)(new MutableArray(v, v1)));
+
+console.log((function (value) {
+  return function (state) {
+    return value;
+  };
+})(new MutableArray(v, v1)));

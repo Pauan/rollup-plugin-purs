@@ -221,12 +221,12 @@ module.exports = function (babel) {
                 statements.push(expressionStatement(arg));
               }
 
-              var expression = callee.body.body[0].argument;
-
               subPath.traverse(inlineVisitor, {
                 params: params,
                 arguments: replace
               });
+
+              var expression = callee.body.body[0].argument;
 
               // TODO path.replaceExpressionWithStatements(); ?
 
