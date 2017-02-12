@@ -107,7 +107,7 @@ module.exports = function (babel) {
               for (var i = 0; i < callee.params.length; ++i) {
                 var param = callee.params[i];
 
-                if (i < length && $util.isPure(node.arguments[i])) {
+                if (i < length && $util.isPure(node.arguments[i], false)) {
                   // TODO is this correct ?
                   replace.push(node.arguments[i]);
 

@@ -1,5 +1,7 @@
 "use strict";
 
+var $util = require("./util");
+
 
 // TODO DirectiveLiteral
 // TODO TemplateLiteral
@@ -9,54 +11,6 @@ function isLiteral(x) {
          (x.type === "StringLiteral") ||
          (x.type === "BooleanLiteral") ||
          (x.type === "NumericLiteral");
-}
-
-
-// https://github.com/babel/babylon/blob/master/ast/spec.md
-// TODO Decorator
-// TODO Directive
-// TODO DirectiveLiteral
-// TODO Import
-// TODO BindExpression ?
-// TODO CallExpression with IIFE ?
-// TODO NewExpression with IIFE ?
-// TODO TemplateLiteral
-// TODO TaggedTemplateExpression
-// TODO TemplateElement
-// TODO ClassBody
-// TODO ClassMethod
-// TODO ClassProperty
-// TODO ClassDeclaration
-// TODO ClassExpression
-// TODO MetaProperty
-function isPureExpression(x) {
-  return (x === null) ||
-         (x.type === "RegExpLiteral") || // TODO are regexps pure...?
-         (x.type === "NullLiteral") ||
-         (x.type === "StringLiteral") ||
-         (x.type === "BooleanLiteral") ||
-         (x.type === "NumericLiteral") ||
-         // TODO is this pure ?
-         (x.type === "Super") ||
-         (x.type === "ThisExpression") ||
-         (x.type === "ArrowFunctionExpression") ||
-         (x.type === "ArrayExpression" && x.elements.every(isPureExpression)) ||
-         (x.type === "ObjectExpression" && x.properties.every(isPureExpression)) ||
-         // TODO is this correct ?
-         (x.type === "ObjectProperty" && isPureExpression(x.key) && isPureExpression(x.value)) ||
-         // TODO is this correct ?
-         (x.type === "ObjectMethod" && isPureExpression(x.key) && isPureExpression(x.value)) ||
-         // TODO is this pure ?
-         (x.type === "SpreadProperty" && isPureExpression(x.argument)) ||
-         (x.type === "FunctionExpression") ||
-         (x.type === "UnaryExpression" && x.operator !== "delete" && isPureExpression(x.argument)) ||
-         (x.type === "BinaryExpression" && isPureExpression(x.left) && isPureExpression(x.right)) ||
-         (x.type === "LogicalExpression" && isPureExpression(x.left) && isPureExpression(x.right)) ||
-         (x.type === "ConditionalExpression" &&
-          isPureExpression(x.test) &&
-          isPureExpression(x.consequent) &&
-          isPureExpression(x.alternate)) ||
-         (x.type === "SequenceExpression" && x.expressions.every(isPureExpression));
 }
 
 
@@ -73,7 +27,7 @@ function isSimple(x) {
       // TODO make this more efficient ?
       // TODO only require purity for all but the last element
       // TODO even if the expressions aren't pure, we can still return the last element
-      if (x.expressions.every(isPureExpression) && isSimple(last)) {
+      if (x.expressions.every(function (x) { return $util.isPure(x, false); }) && isSimple(last)) {
         return last;
 
       } else {
