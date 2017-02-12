@@ -77,7 +77,7 @@ function makeTypeclass(state, binding, path, node) {
       node.init.callee.type === "Identifier") {
     var typeclass = path.scope.getBinding(node.init.callee.name);
 
-    if (typeclass != null) {
+    if (typeclass != null && typeclass.constant) {
       var definition = typeclass.path.node;
 
       if (definition.type === "VariableDeclarator" &&

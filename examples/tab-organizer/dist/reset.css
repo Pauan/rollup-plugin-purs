@@ -1,0 +1,56 @@
+@charset "UTF-8";
+
+* {
+  position: relative;
+
+  box-sizing: border-box;
+
+  flex: 0 0 auto; /* TODO try out other stuff like min-content once it becomes available */
+
+  text-overflow: ellipsis;
+
+  vertical-align: middle; /* TODO I can probably get rid of this */
+
+  /* TODO is this correct ?*/
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  cursor: inherit;
+
+  /* TODO are these a good idea ? */
+  outline-width: 0px;
+  outline-color: transparent;
+  outline-style: solid;
+
+  border-width: 0px;
+  border-color: transparent;
+  border-style: solid;
+  border-radius: 0px;
+  border-spacing: 0px;
+
+  background-color: transparent;
+
+  /* TODO is this correct ? */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+
+  padding: 0px;
+  margin: 0px;
+
+  box-shadow: none;
+}
+
+html, body {
+  cursor: default;
+  width: 100%;
+  height: 100%;
+}
+
+/* Overwriting Webkit's silly user agent style */
+input, textarea, keygen, select, button {
+  font: inherit;
+}
+
+/* TODO is this a good idea ? */
+[hidden] {
+  display: none !important;
+}
