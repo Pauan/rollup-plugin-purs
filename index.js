@@ -106,7 +106,7 @@ module.exports = function (options) {
 
               } else {
                 // TODO super hacky
-                var a = /(?:^|\n|\r\n) *module +([^ ]+)/.exec(file);
+                var a = /(?:^|\n|\r\n) *module +([^ \n\r\(]+)/.exec(file);
 
                 if (a) {
                   resolve(pursPath(options, a[1]));
