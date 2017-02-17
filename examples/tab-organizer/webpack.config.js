@@ -14,11 +14,11 @@ module.exports = {
 
   module: {
     loaders: [
-      /*{
-        test: /\.js$/,
-        include: path.resolve("./output"),
+      {
+        test: /\.(?:js|purs)$/,
+        exclude: /node_modules/,
         loader: "./purs-loader.js"
-      }*/
+      }
     ]
   }
 };
