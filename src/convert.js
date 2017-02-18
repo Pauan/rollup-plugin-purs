@@ -48,7 +48,9 @@ function mergeLoc(x, y) {
 
 
 function exportVar(state, body, path, identifier, expression, loc) {
-  if (expression.type === "Identifier") {
+  if (expression.type === "Identifier" &&
+      // TODO is this check correct ?
+      !isUndefined(path, expression.name)) {
     // TODO adjust the loc ?
     setExport(state, identifier.name, expression);
 
@@ -67,6 +69,7 @@ function exportVar(state, body, path, identifier, expression, loc) {
     });
     return;
 
+  // TODO does this need to check that the expression identifier is defined ?
   } else if (expression.type === "MemberExpression" &&
              expression.object.type === "Identifier" &&
              $util.hasKey(state.imports, expression.object.name)) {

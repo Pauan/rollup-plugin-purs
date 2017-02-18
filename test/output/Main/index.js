@@ -1,3 +1,8 @@
+var $11 = require("../11");
+
+console.log($11.foo, $11.readFloat);
+
+
 var foo = require("../Foo");
 require("../Typeclass");
 
