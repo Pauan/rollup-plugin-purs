@@ -1785,7 +1785,7 @@ is-obj@^1.0.0:
 
 is-posix-bracket@^0.1.0:
   version "0.1.1"
-  resolved "https://registry.yarnpkg.com/is-posix-bracket/-/is-posix-bracket-0.1.1.tgz#3334dc79774368e92f016e6fbc0a88f5cd6e6bc4"
+  resolved "http://registry.npmjs.org/is-posix-bracket/-/is-posix-bracket-0.1.1.tgz#3334dc79774368e92f016e6fbc0a88f5cd6e6bc4"
 
 is-primitive@^2.0.0:
   version "2.0.0"
@@ -2751,8 +2751,8 @@ redent@^1.0.0:
     strip-indent "^1.0.1"
 
 regenerator-runtime@^0.10.0:
-  version "0.10.2"
-  resolved "https://registry.yarnpkg.com/regenerator-runtime/-/regenerator-runtime-0.10.2.tgz#d8180f73493b2f216f6b7282ce1d943372c2c56f"
+  version "0.10.3"
+  resolved "https://registry.yarnpkg.com/regenerator-runtime/-/regenerator-runtime-0.10.3.tgz#8c4367a904b51ea62a908ac310bf99ff90a82a3e"
 
 regex-cache@^0.4.2:
   version "0.4.3"
@@ -3334,7 +3334,7 @@ uid-number@~0.0.6:
 
 umd@^3.0.0:
   version "3.0.1"
-  resolved "https://registry.yarnpkg.com/umd/-/umd-3.0.1.tgz#8ae556e11011f63c2596708a8837259f01b3d60e"
+  resolved "http://registry.npmjs.org/umd/-/umd-3.0.1.tgz#8ae556e11011f63c2596708a8837259f01b3d60e"
 
 unique-stream@^2.0.2:
   version "2.2.1"
@@ -3533,17 +3533,13 @@ window-size@0.1.0:
   version "0.1.0"
   resolved "https://registry.yarnpkg.com/window-size/-/window-size-0.1.0.tgz#5438cd2ea93b202efa3a19fe8887aee7c94f9c9d"
 
-wordwrap@0.0.2:
+wordwrap@0.0.2, wordwrap@~0.0.2:
   version "0.0.2"
   resolved "https://registry.yarnpkg.com/wordwrap/-/wordwrap-0.0.2.tgz#b79669bb42ecb409f83d583cad52ca17eaa1643f"
 
 wordwrap@1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/wordwrap/-/wordwrap-1.0.0.tgz#27584810891456a4171c8d0226441ade90cbcaeb"
-
-wordwrap@~0.0.2:
-  version "0.0.3"
-  resolved "https://registry.yarnpkg.com/wordwrap/-/wordwrap-0.0.3.tgz#a3d5da6cd5c0bc0008d37234bbaf1bed63059107"
 
 wrap-ansi@^2.0.0:
   version "2.1.0"

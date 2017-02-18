@@ -109,7 +109,7 @@ module.exports = function (babel) {
 
                 if (i < length && $util.isPure(node.arguments[i], false)) {
                   // TODO is this correct ?
-                  replace.push(node.arguments[i]);
+                  replace.push(JSON.parse(JSON.stringify(node.arguments[i])));
 
                 } else {
                   // TODO guarantee that collisions cannot occur ?
@@ -124,7 +124,7 @@ module.exports = function (babel) {
                       $util.setLoc({
                         type: "VariableDeclarator",
                         id: temp,
-                        init: (i < length ? node.arguments[i] : null)
+                        init: (i < length ? JSON.parse(JSON.stringify(node.arguments[i])) : null)
                       }, temp)
                     ]
                   }, temp));
@@ -132,7 +132,7 @@ module.exports = function (babel) {
               }
 
               for (var i = callee.params.length; i < length; ++i) {
-                var arg = node.arguments[i];
+                var arg = JSON.parse(JSON.stringify(node.arguments[i]));
 
                 statements.push($util.expressionStatement(arg));
               }
