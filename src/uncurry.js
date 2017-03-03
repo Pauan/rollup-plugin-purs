@@ -135,8 +135,8 @@ module.exports = function (babel) {
     pre: function () {
       this.uncurriedSaturated = 0;
       this.uncurriedUnsaturated = 0;
+      this.cantUncurry = 0;
       this.regular = 0;
-      this.curried = 0;
     },
     post: function () {
       if (this.opts.debug) {
@@ -144,8 +144,8 @@ module.exports = function (babel) {
         console.info("");
         console.info("* Debug uncurrying");
         console.info(" * Curried function calls (saturated): " + this.uncurriedSaturated);
-        console.info(" * Curried function calls (synthesized): " + this.uncurriedUnsaturated);
-        console.info(" * Curried function calls (unoptimized): " + this.curried);
+        console.info(" * Curried function calls (unsaturated): " + this.uncurriedUnsaturated);
+        console.info(" * Curried function calls (can't uncurry): " + this.cantUncurry);
         console.info(" * Regular function calls: " + this.regular);
       }
     },
@@ -184,7 +184,7 @@ module.exports = function (babel) {
               if (args.length >= uncurried.params.length) {
                 for (var i = uncurried.params.length - 1; i >= 0; --i) {
                   if (uncurried.params[i].length !== args[i].length) {
-                    ++state.curried;
+                    ++state.cantUncurry;
                     return;
                   }
 
@@ -231,7 +231,7 @@ module.exports = function (babel) {
 
                 for (var i = args.length - 1; i >= 0; --i) {
                   if (uncurried.params[i].length !== args[i].length) {
-                    ++state.curried;
+                    ++state.cantUncurry;
                     return;
                   }
 
@@ -253,21 +253,15 @@ module.exports = function (babel) {
               }
 
             } else {
-              var curried = 0;
-
-              for (var i = 0; i < args.length; ++i) {
+              if (args.length > 1) {
                 // Curried functions always take a single argument
-                if (args[i].length === 1) {
-                  ++curried;
+                if (args[0].length === 1 &&
+                    args[1].length === 1) {
+                  ++state.cantUncurry;
 
                 } else {
-                  break;
+                  ++state.regular;
                 }
-              }
-
-              // TODO is this check correct ?
-              if (args.length > 1 && curried > 0) {
-                ++state.curried;
 
               } else {
                 ++state.regular;

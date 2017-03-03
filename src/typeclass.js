@@ -115,6 +115,17 @@ function makeTypeclass(state, binding, path, node) {
 
 module.exports = function (babel) {
   return {
+    pre: function () {
+      this.inlined = 0;
+    },
+    post: function () {
+      if (this.opts.debug) {
+        // TODO does this go to stdout or stderr ?
+        console.info("");
+        console.info("* Debug typeclass inlining");
+        console.info(" * Typeclass instances inlined: " + this.inlined);
+      }
+    },
     visitor: {
       MemberExpression: function (path, state) {
         var node = path.node;
@@ -135,6 +146,8 @@ module.exports = function (babel) {
               var typeclass = binding.rollup_plugin_purs_typeclass;
 
               if (typeclass !== false && $util.hasKey(typeclass, name)) {
+                ++state.inlined;
+
                 // TODO loc
                 path.replaceWith(typeclass[name]);
               }
