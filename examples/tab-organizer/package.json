@@ -8,8 +8,7 @@
     "pulp": "^10.0.0",
     "purescript": "0.10.5",
     "rollup": "^0.41.1",
-    "rollup-plugin-commonjs": "^7.0.0",
-    "rollup-plugin-purs": "file:../..",
+    "rollup-plugin-purs": "^1.0.27",
     "rollup-plugin-sourcemaps": "^0.4.1",
     "uglify-js": "^2.7.5",
     "webpack": "^2.2.1"
