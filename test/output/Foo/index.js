@@ -132,7 +132,7 @@ module.exports = {
   bar: $bar.bar1,
   qux: $bar.qux,
   "if": foo_var1,
-  //"var": $bar["var"],
+  "var": $bar["var"],
   "foo_foo'": $bar["foo'"],
   foo_var10: foo_var1,
   "const": foo_var1,

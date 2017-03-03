@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "babel-core": "^6.22.1",
-    "babel-plugin-minify-constant-folding": "^0.0.3",
+    "babel-plugin-minify-constant-folding": "^0.0.4",
     "babel-plugin-minify-dead-code-elimination": "^0.1.2",
     "is-reference": "^1.0.0",
     "recast": "^0.11.18",
