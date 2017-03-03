@@ -282,6 +282,17 @@ babel-plugin-minify-dead-code-elimination@^0.1.2:
     babel-helper-remove-or-void "^0.0.1"
     lodash.some "^4.6.0"
 
+babel-plugin-syntax-do-expressions@^6.8.0:
+  version "6.13.0"
+  resolved "https://registry.yarnpkg.com/babel-plugin-syntax-do-expressions/-/babel-plugin-syntax-do-expressions-6.13.0.tgz#5747756139aa26d390d09410b03744ba07e4796d"
+
+babel-plugin-transform-do-expressions@^6.22.0:
+  version "6.22.0"
+  resolved "https://registry.yarnpkg.com/babel-plugin-transform-do-expressions/-/babel-plugin-transform-do-expressions-6.22.0.tgz#28ccaf92812d949c2cd1281f690c8fdc468ae9bb"
+  dependencies:
+    babel-plugin-syntax-do-expressions "^6.8.0"
+    babel-runtime "^6.22.0"
+
 babel-register@^6.23.0:
   version "6.23.0"
   resolved "https://registry.yarnpkg.com/babel-register/-/babel-register-6.23.0.tgz#c9aa3d4cca94b51da34826c4a0f9e08145d74ff3"
@@ -2853,12 +2864,13 @@ ripemd160@^1.0.0:
   resolved "https://registry.yarnpkg.com/ripemd160/-/ripemd160-1.0.1.tgz#93a4bbd4942bc574b69a8fa57c71de10ecca7d6e"
 
 rollup-plugin-purs@^1.0.27:
-  version "1.0.29"
-  resolved "https://registry.yarnpkg.com/rollup-plugin-purs/-/rollup-plugin-purs-1.0.29.tgz#c45519d0663f906273bfd05f210debf46938d3cc"
+  version "1.0.30"
+  resolved "https://registry.yarnpkg.com/rollup-plugin-purs/-/rollup-plugin-purs-1.0.30.tgz#058afbbc86a3ce1495eeb39109f4ec797447570e"
   dependencies:
     babel-core "^6.22.1"
     babel-plugin-minify-constant-folding "^0.0.4"
     babel-plugin-minify-dead-code-elimination "^0.1.2"
+    babel-plugin-transform-do-expressions "^6.22.0"
     is-reference "^1.0.0"
     recast "^0.11.18"
     rollup-pluginutils "^2.0.1"
@@ -3528,17 +3540,13 @@ window-size@0.1.0:
   version "0.1.0"
   resolved "https://registry.yarnpkg.com/window-size/-/window-size-0.1.0.tgz#5438cd2ea93b202efa3a19fe8887aee7c94f9c9d"
 
-wordwrap@0.0.2:
+wordwrap@0.0.2, wordwrap@~0.0.2:
   version "0.0.2"
   resolved "https://registry.yarnpkg.com/wordwrap/-/wordwrap-0.0.2.tgz#b79669bb42ecb409f83d583cad52ca17eaa1643f"
 
 wordwrap@1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/wordwrap/-/wordwrap-1.0.0.tgz#27584810891456a4171c8d0226441ade90cbcaeb"
-
-wordwrap@~0.0.2:
-  version "0.0.3"
-  resolved "https://registry.yarnpkg.com/wordwrap/-/wordwrap-0.0.3.tgz#a3d5da6cd5c0bc0008d37234bbaf1bed63059107"
 
 wrap-ansi@^2.0.0:
   version "2.1.0"

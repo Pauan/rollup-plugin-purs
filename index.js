@@ -268,7 +268,9 @@ module.exports = function (options) {
           "minify-constant-folding",
           "minify-dead-code-elimination",
           // TODO is this the correct place for this ?
-          "transform-do-expressions"
+          "transform-do-expressions",
+          // TODO do we need transform-es2015-block-scoped-functions ?
+          "transform-es2015-block-scoping"
         ]
       });
     }
