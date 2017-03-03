@@ -266,7 +266,9 @@ module.exports = function (options) {
           $propagate,
           // TODO use babel-preset-babili ?
           "minify-constant-folding",
-          "minify-dead-code-elimination"
+          "minify-dead-code-elimination",
+          // TODO is this the correct place for this ?
+          "transform-do-expressions"
         ]
       });
     }

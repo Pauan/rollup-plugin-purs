@@ -101,6 +101,22 @@ exports.expressionStatement = function (node) {
 };
 
 
+exports.statements = function (body, parent) {
+  if (body.length === 1) {
+    return body[0];
+
+  } else {
+    return {
+      type: "BlockStatement",
+      body: body,
+      start: parent.start,
+      end: parent.end,
+      loc: parent.loc
+    };
+  }
+};
+
+
 exports.print = function (node) {
   return babel.transformFromAst({
     type: "Program",
@@ -125,6 +141,19 @@ exports.print = function (node) {
 // TODO DirectiveLiteral ?
 // TODO CallExpression with IIFE ?
 // TODO NewExpression with IIFE ?
+// TODO WithStatement ?
+// TODO TryStatement ?
+// TODO CatchClause ?
+// TODO WhileStatement ?
+// TODO DoWhileStatement ?
+// TODO ForStatement ?
+// TODO ForInStatement ?
+// TODO ForOfStatement ?
+// TODO ForAwaitStatement ?
+// TODO ObjectPattern ?
+// TODO ArrayPattern ?
+// TODO RestElement ?
+// TODO AssignmentPattern ?
 function isPure(node, strict) {
       // TODO this is only needed for ArrayExpression
   if (node === null ||
@@ -138,12 +167,14 @@ function isPure(node, strict) {
       node.type === "NullLiteral" ||
       node.type === "StringLiteral" ||
       node.type === "BooleanLiteral" ||
-      node.type === "NumericLiteral") {
+      node.type === "NumericLiteral" ||
+      node.type === "EmptyStatement") {
     return true;
 
   } else if (node.type === "MemberExpression" ||
              // TODO can regexps be treated as always pure ?
-             node.type === "RegExpLiteral") {
+             node.type === "RegExpLiteral" ||
+             node.type === "DebuggerStatement") {
     return !strict;
 
   // TODO is this necessary ?
@@ -157,37 +188,62 @@ function isPure(node, strict) {
     return false;
 
   } else if (node.type === "ArrayExpression") {
-    return node.elements.every(isPure);
+    return node.elements.every(function (x) { return isPure(x, strict); });
 
   } else if (node.type === "ObjectExpression") {
-    return node.properties.every(isPure);
+    return node.properties.every(function (x) { return isPure(x, strict); });
 
   } else if (node.type === "ObjectProperty" ||
              node.type === "ObjectMethod") {
-    return isPure(node.key) &&
-           isPure(node.value);
+    return isPure(node.key, strict) &&
+           isPure(node.value, strict);
 
   } else if (node.type === "RestProperty" ||
              node.type === "SpreadProperty" ||
              node.type === "SpreadElement") {
-    return isPure(node.argument);
+    return isPure(node.argument, strict);
 
   } else if (node.type === "UnaryExpression") {
     return node.operator !== "delete" &&
-           isPure(node.argument);
+           isPure(node.argument, strict);
 
   } else if (node.type === "BinaryExpression" ||
              node.type === "LogicalExpression") {
-    return isPure(node.left) &&
-           isPure(node.right);
+    return isPure(node.left, strict) &&
+           isPure(node.right, strict);
 
   } else if (node.type === "ConditionalExpression") {
-    return isPure(node.test) &&
-           isPure(node.alternate) &&
-           isPure(node.consequent);
+    return isPure(node.test, strict) &&
+           isPure(node.alternate, strict) &&
+           isPure(node.consequent, strict);
 
   } else if (node.type === "SequenceExpression") {
-    return node.expressions.every(isPure);
+    return node.expressions.every(function (x) { return isPure(x, strict); });
+
+  } else if (node.type === "Program" ||
+             node.type === "BlockStatement") {
+    return node.body.every(function (x) { return isPure(x, strict); });
+
+  } else if (node.type === "ExpressionStatement") {
+    return isPure(node.expression, strict);
+
+  // TODO is this correct ?
+  } else if (node.type === "LabeledStatement") {
+    return isPure(node.body, strict);
+
+  } else if (node.type === "IfStatement") {
+    return isPure(node.test, strict) &&
+           isPure(node.consequent, strict) &&
+           isPure(node.alternate, strict);
+
+  } else if (node.type === "SwitchStatement") {
+    return isPure(node.discriminant, strict) &&
+           node.cases.every(function (x) { return isPure(x, strict); });
+
+  } else if (node.type === "SwitchCase") {
+    return isPure(node.test, strict) &&
+           // TODO special case break ?
+           node.consequent.every(function (x) { return isPure(x, strict); });
 
   // TODO throw an error instead ?
   } else {

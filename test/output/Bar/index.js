@@ -1,6 +1,11 @@
 var globals = 10;
 
 (function () {
+  "use strict";
+  console.log("use strict");
+})();
+
+(function () {
   console.log(globals_119);
 })();
 
