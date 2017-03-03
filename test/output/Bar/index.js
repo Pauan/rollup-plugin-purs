@@ -9,6 +9,8 @@ console.log(globals);
 
 var bar = "bar4";
 
+console.log(exports.null);
+
 exports.bar1 = "bar1";
 exports.qux = "bar2";
 exports["uh"] = "bar3";
@@ -18,6 +20,18 @@ exports.main = main;
 exports.hasOwnProperty = "hi!";
 exports.null = 10;
 //exports.main = main;
+
+exports.recursive1 = function () {
+  exports.recursive2();
+};
+
+(function () {
+  exports.recursive2 = function () {
+    exports.recursive1();
+  };
+})();
+
+console.log(exports.recursive1(), exports.recursive2());
 
 var log = 50;
 

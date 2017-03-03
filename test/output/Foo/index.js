@@ -8,7 +8,7 @@ var bar2 = require("../Bar")
 
 var $qux = require("../Qux");
 
-console.log($qux.default);
+console.log($qux.bar1, $qux.null);
 
 //var ___ = require("foo" + "bar");
 

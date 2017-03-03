@@ -4,9 +4,11 @@ console.log($11.foo, $11.readFloat);
 
 
 var foo = require("../Foo");
+var corge = require("../Corge");
 require("../Typeclass");
 
 function main() {
+  console.log(corge.foo, corge.bar, corge.default);
   console.log(foo.null);
   console.log("MAIN", foo.main(), foo.curried(1), foo.curried(1)(2), foo.curried(1)(2)(3), foo.curried(1)(2)(3)(4));
 }

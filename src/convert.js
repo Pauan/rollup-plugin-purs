@@ -4,37 +4,36 @@ var $babel = require("babel-core");
 var $util = require("./util");
 
 
+// TODO handle unicode
 function isValidIdentifier(x) {
   return /^[$_a-zA-Z'][$_a-zA-Z0-9']*$/.test(x);
 }
 
 
-function stringToIdentifier(state, x) {
-  if (x.type === "StringLiteral" && isValidIdentifier(x.value)) {
-    if (/'/.test(x.value)) {
-      state.opts.warn("Primes are not allowed in JavaScript identifiers: " + x.value, x.start);
+function toIdentifier(state, x, computed) {
+  if (x.type === "StringLiteral") {
+    if (isValidIdentifier(x.value)) {
+      if (/'/.test(x.value)) {
+        state.opts.warn("Primes are not allowed in JavaScript identifiers: " + x.value, x.start);
+      }
+
+      return {
+        type: "Identifier",
+        name: x.value.replace(/'/g, "$prime"),
+        start: x.start,
+        end: x.end,
+        loc: x.loc
+      };
+
+    } else {
+      return null;
     }
 
-    return {
-      type: "Identifier",
-      name: x.value.replace(/'/g, "$prime"),
-      start: x.start,
-      end: x.end,
-      loc: x.loc
-    };
-
-  } else {
-    return null;
-  }
-}
-
-
-function toIdentifier(state, x) {
-  if (x.type === "Identifier") {
+  } else if (!computed && x.type === "Identifier") {
     return x;
 
   } else {
-    return stringToIdentifier(state, x);
+    return null;
   }
 }
 
@@ -44,6 +43,48 @@ function mergeLoc(x, y) {
     start: x.start,
     end: y.end
   };
+}
+
+
+function exportTempVar(state, body, path, identifier, expression, loc) {
+  // TODO guarantee that collisions cannot occur ?
+  var temp = path.scope.generateUidIdentifier(identifier.name);
+
+  // TODO is this correct ?
+  temp.loc = identifier.loc;
+
+  // TODO adjust the loc ?
+  setExport(state, identifier.name, temp);
+
+  // TODO maybe use const ?
+  // var temp = expression;
+  body.push({
+    type: "VariableDeclaration",
+    kind: "var",
+    declarations: [{
+      type: "VariableDeclarator",
+      id: temp,
+      init: expression,
+      // TODO mergeLoc(temp.loc, expression.loc) ?
+      loc: loc
+    }],
+    loc: loc
+  });
+
+  // export { temp as identifier };
+  body.push({
+    type: "ExportNamedDeclaration",
+    declaration: null,
+    specifiers: [{
+      type: "ExportSpecifier",
+      local: temp,
+      exported: identifier,
+      // TODO mergeLoc(temp.loc, identifier.loc) ?
+      loc: loc
+    }],
+    source: null,
+    loc: loc
+  });
 }
 
 
@@ -74,7 +115,7 @@ function exportVar(state, body, path, identifier, expression, loc) {
              expression.object.type === "Identifier" &&
              $util.hasKey(state.imports, expression.object.name)) {
     var file = state.imports[expression.object.name];
-    var from = toIdentifier(state, expression.property);
+    var from = toIdentifier(state, expression.property, expression.computed);
 
     if (from !== null) {
       // TODO adjust the loc ?
@@ -98,42 +139,7 @@ function exportVar(state, body, path, identifier, expression, loc) {
   }
 
   if (isUndefined(path, identifier.name)) {
-    // TODO guarantee that collisions cannot occur ?
-    var temp = path.scope.generateUidIdentifier(identifier.name);
-
-    // TODO is this correct ?
-    temp.loc = identifier.loc;
-
-    // TODO adjust the loc ?
-    setExport(state, identifier.name, temp);
-
-    // TODO maybe use const ?
-    // var temp = expression;
-    body.push({
-      type: "VariableDeclaration",
-      kind: "var",
-      declarations: [{
-        type: "VariableDeclarator",
-        id: temp,
-        init: expression,
-        loc: mergeLoc(temp.loc, expression.loc)
-      }],
-      loc: loc
-    });
-
-    // export { temp as identifier };
-    body.push({
-      type: "ExportNamedDeclaration",
-      declaration: null,
-      specifiers: [{
-        type: "ExportSpecifier",
-        local: temp,
-        exported: identifier,
-        loc: mergeLoc(temp.loc, identifier.loc)
-      }],
-      source: null,
-      loc: loc
-    });
+    exportTempVar(state, body, path, identifier, expression, loc);
 
   } else {
     // TODO maybe this should warn instead ?
@@ -160,37 +166,65 @@ function isUndefined(path, name) {
 }
 
 
-function isUndefinedIdentifier(path, node, name) {
+function isUndefinedIdentifier(path, node) {
   return node.type === "Identifier" &&
-         node.name === name &&
          isUndefined(path, node.name);
 }
 
 
-function isProperty(x, name) {
-  return (!x.computed && x.property.type === "Identifier" && x.property.name === name) ||
-         (x.computed && x.property.type === "StringLiteral" && x.property.value === name);
-}
-
-
-function replaceExport(state, name) {
-  if ($util.hasKey(state.exports, name)) {
-    // TODO check that the exported variable isn't bound ?
+// TODO what if the variable isn't exported ?
+function replaceExport(state, path, identifier, loc) {
+  if ($util.hasKey(state.exports, identifier.name)) {
     // TODO adjust the source maps ?
-    return state.exports[name];
+    return state.exports[identifier.name];
 
   } else {
-    // TODO loc
-    state.opts.error("Variable " + name + " is not exported");
-  }
+    // TODO make this faster ?
+    var top = path.findParent(function (path) { return path.isProgram(); });
 
-  return null;
+    // TODO does it need to mangle the name ?
+    var temp = path.scope.generateUidIdentifier(identifier.name);
+
+    temp.loc = identifier.loc;
+
+    // export { temp as identifier };
+    top.node.body.unshift({
+      type: "ExportNamedDeclaration",
+      declaration: null,
+      specifiers: [{
+        type: "ExportSpecifier",
+        local: temp,
+        exported: identifier,
+        loc: loc
+      }],
+      source: null,
+      loc: loc
+    });
+
+    // TODO use unshiftContainer ?
+    // var temp;
+    top.node.body.unshift({
+      type: "VariableDeclaration",
+      kind: "var",
+      declarations: [{
+        type: "VariableDeclarator",
+        id: temp,
+        init: null,
+        loc: loc
+      }],
+      loc: loc
+    });
+
+    state.exports[identifier.name] = temp;
+    return temp;
+  }
 }
 
 
 function isRequireCall(path, node) {
   return node.type === "CallExpression" &&
-         isUndefinedIdentifier(path, node.callee, "require") &&
+         isUndefinedIdentifier(path, node.callee) &&
+         node.callee.name === "require" &&
          node.arguments.length === 1 &&
          node.arguments[0].type === "StringLiteral";
 }
@@ -267,14 +301,14 @@ function transformCommonJS(babel) {
           } else if (x.type === "ExpressionStatement" &&
                      x.expression.type === "AssignmentExpression" &&
                      x.expression.operator === "=" &&
-                     x.expression.left.type === "MemberExpression") {
-            // TODO handle module.exports.foo ?
-            if (isUndefinedIdentifier(path, x.expression.left.object, "exports")) {
-              // TODO what about computed expressions ?
-              var identifier = toIdentifier(state, x.expression.left.property);
+                     x.expression.left.type === "MemberExpression" &&
+                     isUndefinedIdentifier(path, x.expression.left.object)) {
+            var identifier = toIdentifier(state, x.expression.left.property, x.expression.left.computed);
 
+            if (identifier !== null) {
+              // TODO handle module.exports.foo ?
               // exports.foo = bar;
-              if (identifier !== null) {
+              if (x.expression.left.object.name === "exports") {
                 if (state.moduleOverwritten) {
                   // TODO is identifier.start correct ?
                   state.opts.warn("Export " + identifier.name + " is ignored", identifier.start);
@@ -282,68 +316,58 @@ function transformCommonJS(babel) {
 
                 exportVar(state, body, path, identifier, x.expression.right, x.loc);
 
+              // module.exports = foo;
+              } else if (x.expression.left.object.name === "module" &&
+                         identifier.name === "exports") {
+                state.moduleOverwritten = true;
+
+                for (var key in state.exports) {
+                  if ($util.hasKey(state.exports, key)) {
+                    // TODO loc
+                    state.opts.warn("Export " + key + " is ignored");
+                  }
+                }
+
+                // module.exports = require("foo");
+                if (isRequireCall(path, x.expression.right)) {
+                  var file = x.expression.right.arguments[0];
+
+                  body.push({
+                    type: "ExportAllDeclaration",
+                    source: file,
+                    loc: x.loc
+                  });
+
+                } else {
+                  // module.exports = { ... };
+                  if (x.expression.right.type === "ObjectExpression") {
+                    x.expression.right.properties.forEach(function (x) {
+                      // TODO what about computed expressions ?
+                      var identifier = toIdentifier(state, x.key, x.computed);
+
+                      // foo: bar
+                      if (identifier !== null) {
+                        // TODO handle get/set different ?
+                        exportVar(state, body, path, identifier, x.value, x.loc);
+
+                      } else {
+                        // TODO is this the correct loc ?
+                        state.opts.warn("Invalid module export", x.start);
+                      }
+                    });
+                  }
+
+                  exportTempVar(state, body, path, {
+                    type: "Identifier",
+                    name: "default",
+                    // TODO is this correct ?
+                    loc: x.expression.left.loc
+                  }, x.expression.right, x.loc);
+                }
+
               } else {
                 body.push(x);
               }
-
-            // module.exports = foo;
-            } else if (isUndefinedIdentifier(path, x.expression.left.object, "module") &&
-                       isProperty(x.expression.left, "exports")) {
-              state.moduleOverwritten = true;
-
-              for (var key in state.exports) {
-                if ($util.hasKey(state.exports, key)) {
-                  // TODO loc
-                  state.opts.warn("Export " + key + " is ignored");
-                }
-              }
-
-              // module.exports = { ... };
-              if (x.expression.right.type === "ObjectExpression") {
-                x.expression.right.properties.forEach(function (x) {
-                  // TODO what about computed expressions ?
-                  var identifier = toIdentifier(state, x.key);
-
-                  // foo: bar
-                  if (identifier !== null) {
-                    // TODO handle get/set different ?
-                    exportVar(state, body, path, identifier, x.value, x.loc);
-
-                  } else {
-                    // TODO is this the correct loc ?
-                    state.opts.warn("Invalid module export", x.start);
-                  }
-                });
-              }
-
-              // TODO guarantee that collisions cannot occur ?
-              var temp = path.scope.generateUidIdentifier("default");
-
-              // TODO is this correct ?
-              temp.loc = x.expression.left.loc;
-
-              setExport(state, "default", temp);
-
-              // TODO maybe use const ?
-              // var temp = foo;
-              body.push({
-                type: "VariableDeclaration",
-                kind: "var",
-                declarations: [{
-                  type: "VariableDeclarator",
-                  id: temp,
-                  init: x.expression.right,
-                  loc: x.loc
-                }],
-                loc: x.loc
-              });
-
-              // export default temp;
-              body.push({
-                type: "ExportDefaultDeclaration",
-                declaration: temp,
-                loc: x.loc
-              });
 
             } else {
               body.push(x);
@@ -357,46 +381,106 @@ function transformCommonJS(babel) {
         node.body = body;
       },
 
+      AssignmentExpression: function (path, state) {
+        var node = path.node;
+
+        // module.exports = foo;
+        if (node.operator === "=" &&
+            node.left.type === "MemberExpression" &&
+            isUndefinedIdentifier(path, node.left.object) &&
+            node.left.object.name === "module") {
+          var identifier = toIdentifier(state, node.left.property, node.left.computed);
+
+          if (identifier !== null &&
+              identifier.name === "exports") {
+            // TODO code duplication
+            state.moduleOverwritten = true;
+
+            // TODO code duplication
+            for (var key in state.exports) {
+              if ($util.hasKey(state.exports, key)) {
+                // TODO loc
+                state.opts.warn("Export " + key + " is ignored");
+              }
+            }
+
+            // module.exports = { ... };
+            if (node.right.type === "ObjectExpression") {
+              // TODO handle get/set different ?
+              node.right.properties.forEach(function (x) {
+                // TODO what about computed expressions ?
+                var identifier = toIdentifier(state, x.key, x.computed);
+
+                // foo: bar
+                if (identifier !== null) {
+                  // TODO handle this better if it is an identifier ?
+                  x.value = {
+                    type: "AssignmentExpression",
+                    operator: "=",
+                    left: replaceExport(state, path, identifier),
+                    right: x.value,
+                    loc: x.value.loc
+                  };
+
+                } else {
+                  // TODO is this the correct loc ?
+                  state.opts.warn("Invalid module export", x.start);
+                }
+              });
+            }
+          }
+        }
+      },
+
+
       MemberExpression: function (path, state) {
         var node = path.node;
 
-        var identifier = stringToIdentifier(state, node.property);
+        var identifier = toIdentifier(state, node.property, node.computed);
 
-        // foo["bar"] = qux;
-        if (identifier !== null && node.computed) {
-          // foo.bar = qux;
+        if (identifier !== null) {
           node.computed = false;
           node.property = identifier;
-        }
 
-        // TODO handle module.exports.foo ?
-        if (isUndefinedIdentifier(path, node.object, "exports") &&
-            // TODO is this correct ?
-            !node.computed &&
-            node.property.type === "Identifier" &&
-            // TODO is this correct ?
-            !state.moduleOverwritten) {
-          path.replaceWith(replaceExport(state, node.property.name));
+          if (isUndefinedIdentifier(path, node.object)) {
+            // TODO handle module.exports.foo ?
+            // exports.foo
+            if (node.object.name === "exports") {
+              path.replaceWith(replaceExport(state, path, identifier));
 
-        } else if (isUndefinedIdentifier(path, node.object, "module") &&
-                   isProperty(node, "exports") &&
-                   // TODO is this correct ?
-                   state.moduleOverwritten) {
-          path.replaceWith(replaceExport(state, "default"));
+            // module.exports
+            } else if (node.object.name === "module" &&
+                       identifier.name === "exports") {
+              path.replaceWith(replaceExport(state, path, {
+                type: "Identifier",
+                name: "default",
+                // TODO is this correct ?
+                loc: node.loc
+              }));
+            }
+          }
         }
       },
 
       ReferencedIdentifier: function (path, state) {
         var node = path.node;
 
-        if (state.opts.warnOnDynamicRequire && isUndefinedIdentifier(path, node, "require")) {
-          state.opts.warn("Dynamic require", node.start);
+        if (isUndefinedIdentifier(path, node)) {
+          if (node.name === "require") {
+            if (state.opts.warnOnDynamicRequire) {
+              state.opts.warn("Dynamic require", node.start);
+            }
 
-        } else if (state.opts.warnOnDynamicExports && isUndefinedIdentifier(path, node, "exports")) {
-          state.opts.warn("Dynamic exports", node.start);
+          } else if (node.name === "exports") {
+            if (state.opts.warnOnDynamicExports) {
+              state.opts.warn("Dynamic exports", node.start);
+            }
 
-        } else if (state.opts.warnOnDynamicModule && isUndefinedIdentifier(path, node, "module")) {
-          state.opts.warn("Dynamic module", node.start);
+          } else if (node.name === "module") {
+            if (state.opts.warnOnDynamicModule) {
+              state.opts.warn("Dynamic module", node.start);
+            }
+          }
         }
       }
     }
