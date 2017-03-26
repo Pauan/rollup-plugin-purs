@@ -91,19 +91,25 @@ function makeTypeclass(state, binding, path, node) {
           // TODO guarantee that this assertion always holds
           console.assert(args.length === replace.params.length);
 
-          replace.params.forEach(function (x, i) {
-            // TODO loc
-            path.insertBefore([{
-              type: "VariableDeclarator",
-              id: x,
-              init: args[i],
-            }]);
+          path.parentPath.insertBefore(replace.params.map(function (x, i) {
+            var init = args[i];
 
             args[i] = x;
-          });
 
-          // TODO is this correct ?
-          path.scope.registerDeclaration(path.parentPath);
+            // TODO loc
+            return {
+              type: "VariableDeclaration",
+              kind: "var",
+              declarations: [{
+                type: "VariableDeclarator",
+                id: x,
+                init: init,
+              }]
+            };
+          })).forEach(function (newPath) {
+            // TODO is this correct ?
+            path.scope.registerDeclaration(newPath);
+          });
 
           binding.rollup_plugin_purs_typeclass = replace.members;
         }

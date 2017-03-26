@@ -40,7 +40,6 @@ function makeUncurried(binding, path, id, top) {
       };
 
       // TODO is this correct ?
-      // TODO maybe this should set unique to true ?
       // TODO loc ?
       binding.scope.push({
         kind: "const",

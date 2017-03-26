@@ -29,12 +29,16 @@ var visitor = {
         } else {
           ++state.dead;
 
-          if (!x.binding.rollup_plugin_purs_is_pure) {
-            // TODO loc
-            x.path.parentPath.insertBefore($util.expressionStatement(x.path.node.init));
-          }
+          if (x.binding.rollup_plugin_purs_is_pure) {
+            x.path.remove();
 
-          x.path.remove();
+          } else {
+            var parentPath = x.path.parentPath;
+
+            console.assert(parentPath.node.declarations.length === 1);
+
+            parentPath.replaceWith($util.expressionStatement(x.path.node.init));
+          }
         }
       });
     }
@@ -45,10 +49,6 @@ var visitor = {
     var binding = path.scope.getBinding(node.name);
 
     if (binding != null) {
-      if (node.name === "_Semigroupoid") {
-        console.log(path.parentPath.node.type);
-      }
-
       if (!binding.rollup_plugin_used) {
         binding.rollup_plugin_used = true;
 

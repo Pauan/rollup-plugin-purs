@@ -463,8 +463,6 @@ module.exports = function (babel) {
 
               var statements = [];
 
-              var bindings = [];
-
               var replace = [];
 
               callee.params.forEach(function (param, i) {
@@ -485,11 +483,18 @@ module.exports = function (babel) {
 
                     replace.push(temp);
 
-                    bindings.push($util.setLoc({
-                      type: "VariableDeclarator",
-                      id: temp,
-                      init: JSON.parse(JSON.stringify(arg))
-                    }, temp));
+                    statements.push({
+                      type: "VariableDeclaration",
+                      kind: "let",
+                      declarations: [
+                        $util.setLoc({
+                          type: "VariableDeclarator",
+                          id: temp,
+                          init: JSON.parse(JSON.stringify(arg))
+                        }, temp)
+                      ],
+                      loc: node.loc
+                    });
                   }
 
                 } else {
@@ -501,23 +506,21 @@ module.exports = function (babel) {
                   } else {
                     replace.push(null);
 
-                    bindings.push($util.setLoc({
-                      type: "VariableDeclarator",
-                      id: JSON.parse(JSON.stringify(param)),
-                      init: null
-                    }, param));
+                    statements.push({
+                      type: "VariableDeclaration",
+                      kind: "let",
+                      declarations: [
+                        $util.setLoc({
+                          type: "VariableDeclarator",
+                          id: JSON.parse(JSON.stringify(param)),
+                          init: null
+                        }, param)
+                      ],
+                      loc: node.loc
+                    });
                   }
                 }
               });
-
-              if (bindings.length) {
-                statements.push({
-                  type: "VariableDeclaration",
-                  kind: "let",
-                  declarations: bindings,
-                  loc: node.loc
-                });
-              }
 
               for (var i = callee.params.length; i < length; ++i) {
                 var arg = args[i];

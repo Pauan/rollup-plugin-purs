@@ -14,6 +14,7 @@ var $removeSequence = require("./src/remove-sequence");
 var $removeIIFE = require("./src/remove-iife");
 var $typeclass = require("./src/typeclass");
 var $deadCode = require("./src/dead-code");
+var $splitVars = require("./src/split-vars");
 
 
 function pursPath(options, path) {
@@ -264,6 +265,8 @@ module.exports = function (options) {
       // TODO use "minify-dead-code-elimination" ?
       plugins.push("minify-constant-folding");
 
+      plugins.push($splitVars);
+
       if (options.optimizations.removeDeadCode) {
         // TODO is this the correct `code` to use ?
         info = $babel.transformFromAst(info.ast, null, {
@@ -275,6 +278,8 @@ module.exports = function (options) {
         });
 
         plugins = [
+          $propagate,
+
           [$deadCode, { debug: options.debug }]
         ];
       }

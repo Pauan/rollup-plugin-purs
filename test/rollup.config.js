@@ -5,7 +5,6 @@ export default {
   dest: "bundle.js",
   format: "iife",
   sourceMap: true,
-  treeshake: true,
   plugins: [
     purs({
       debug: true,
