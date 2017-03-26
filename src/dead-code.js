@@ -3,9 +3,55 @@
 var $util = require("./util");
 
 
+function isPure(scope, expression) {
+  return $util.isPure(expression, false) || isPureNew(scope, expression);
+}
+
+
+// TODO move this into the $util.isPure function ?
+function isPureNew(scope, expression) {
+  if (expression.type === "NewExpression") {
+    if (expression.callee.type === "Identifier") {
+      var classBinding = scope.getBinding(expression.callee.name);
+
+      // TODO FunctionDeclaration ?
+      // TODO ClassDeclaration ?
+      if (classBinding != null &&
+          classBinding.constant &&
+          classBinding.path.node.type === "VariableDeclarator") {
+        var init = classBinding.path.get("init");
+
+        // TODO check the params
+        if (init.node.type === "FunctionExpression") {
+          var isPureBody = init.get("body").get("body").every(function (path) {
+            return path.node.type === "ExpressionStatement" &&
+                   path.node.expression.type === "AssignmentExpression" &&
+                   path.node.expression.operator === "=" &&
+                   // TODO is this the correct scope ?
+                   // TODO is this correct ?
+                   isPure(path.scope, path.node.expression.left) &&
+                   // TODO is this the correct scope ?
+                   isPure(path.scope, path.node.expression.right);
+          });
+
+          var isPureArguments = expression.arguments.every(function (node) {
+            return isPure(scope, node);
+          });
+
+          return isPureBody && isPureArguments;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+
 function setPurity(binding, expression) {
   if (binding.rollup_plugin_purs_is_pure == null) {
-    if ($util.isPure(expression, false)) {
+    // TODO is this scope correct ?
+    if (isPure(binding.scope, expression)) {
       binding.rollup_plugin_purs_is_pure = true;
 
     } else {
@@ -48,6 +94,7 @@ var visitor = {
 
     var binding = path.scope.getBinding(node.name);
 
+    // TODO require the variable to be constant ?
     if (binding != null) {
       if (!binding.rollup_plugin_used) {
         binding.rollup_plugin_used = true;
@@ -78,6 +125,7 @@ var visitor = {
     var node = path.node;
 
     if (node.id.type === "Identifier") {
+      // TODO require the variable to be constant ?
       var binding = path.scope.getBinding(node.id.name);
 
       console.assert(binding != null);
@@ -99,6 +147,7 @@ var visitor = {
 
     console.assert(node.id.type === "Identifier");
 
+    // TODO require the variable to be constant ?
     var binding = path.scope.getBinding(node.id.name);
 
     console.assert(binding != null);

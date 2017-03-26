@@ -105,6 +105,7 @@ module.exports = function (babel) {
         var node = path.node;
 
         if (node.callee.type === "Identifier") {
+          // TODO require the variable to be constant ?
           var binding = path.scope.getBinding(node.callee.name);
 
           if (binding != null) {
