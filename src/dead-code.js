@@ -65,6 +65,7 @@ function setPurity(binding, expression) {
 // TODO ImportDeclaration ?
 // TODO ExportNamedDeclaration
 // TODO ExportDefaultDeclaration
+// TODO assignment shouldn't count as being used unless the right side is impure
 var visitor = {
   Program: {
     exit: function (path, state) {
