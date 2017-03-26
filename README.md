@@ -37,14 +37,15 @@ These are the default options:
 
 ```js
 purs({
-  include: undefined,
-  exclude: undefined,
-  outputDir: "output",  // Directory where the PureScript files are located
-  runMain: true,        // Whether to call the `main` function or not
-  debug: false,         // Displays additional warnings and statistics
+  include: undefined,     // Glob pattern for files/directories to include
+  exclude: undefined,     // Glob pattern for files/directories to exclude
+  outputDir: "output",    // Directory where the PureScript files are located
+  runMain: true,          // Whether to call the `main` function or not
+  debug: false,           // Displays additional warnings and statistics
   optimizations: {
-    uncurry: true,      // Whether to apply the uncurrying optimization or not
-    inline: true,       // Whether to inline some functions or not
+    uncurry: true,        // Whether to apply the uncurrying optimization or not
+    inline: true,         // Whether to inline some functions or not
+    removeDeadCode: true  // Whether to remove dead code or not
   }
 })
 ```
@@ -87,9 +88,11 @@ These are the optimizations which can be turned on or off:
 
   It also inlines typeclass instance methods when it can.
 
-In addition to the uncurrying and inlining optimizations, there are some optimizations which are *always* applied:
+* `removeDeadCode`
 
-* Dead code elimination
+  Removes code which is not used. This dramatically reduces the file size.
+
+In addition to the above optimizations, there are some optimizations which are *always* applied:
 
 * Constant propagation/folding
 

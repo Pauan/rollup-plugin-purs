@@ -313,7 +313,10 @@ var inlineVisitor = {
 
       if (index !== -1) {
         console.assert(index < state.arguments.length);
-        path.replaceWith(state.arguments[index]);
+
+        if (state.arguments[index] !== null) {
+          path.replaceWith(state.arguments[index]);
+        }
       }
     }
   }
@@ -465,10 +468,10 @@ module.exports = function (babel) {
               var replace = [];
 
               callee.params.forEach(function (param, i) {
+                var binding = params[i];
+
                 if (i < length) {
                   var arg = args[i];
-
-                  var binding = params[i];
 
                   if (binding.constant &&
                       binding.references <= 1 &&
@@ -490,8 +493,20 @@ module.exports = function (babel) {
                   }
 
                 } else {
-                  // TODO what if the binding is mutated ?
-                  replace.push(_void(param.loc));
+                  if (binding.constant) {
+                    // TODO what if the binding is mutated ?
+                    replace.push(_void(param.loc));
+
+                  // TODO test this
+                  } else {
+                    replace.push(null);
+
+                    bindings.push($util.setLoc({
+                      type: "VariableDeclarator",
+                      id: JSON.parse(JSON.stringify(param)),
+                      init: null
+                    }, param));
+                  }
                 }
               });
 

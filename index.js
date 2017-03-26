@@ -13,6 +13,7 @@ var $propagate = require("./src/propagate");
 var $removeSequence = require("./src/remove-sequence");
 var $removeIIFE = require("./src/remove-iife");
 var $typeclass = require("./src/typeclass");
+var $deadCode = require("./src/dead-code");
 
 
 function pursPath(options, path) {
@@ -65,6 +66,10 @@ module.exports = function (options) {
     options.optimizations.inline = true;
   }
 
+  if (options.optimizations.removeDeadCode == null) {
+    options.optimizations.removeDeadCode = true;
+  }
+
   var filter = $utils.createFilter(options.include, options.exclude);
 
   var entry = null;
@@ -74,6 +79,9 @@ module.exports = function (options) {
 
     // TODO hacky
     options: function (rollup) {
+      // We use a better treeshaking algorithm than Rollup, so we disable Rollup's treeshaking for faster speed
+      rollup.treeshake = false;
+
       if (options.runMain &&
           rollup.entry != null &&
           rollup.entry !== entryPath) {
@@ -243,7 +251,20 @@ module.exports = function (options) {
 
       plugins.push([$removeIIFE, { debug: options.debug }]);
 
-      if (plugins.length) {
+      plugins.push($removeSequence);
+
+      // TODO is this the correct place for this ?
+      plugins.push("transform-do-expressions");
+
+      // TODO do we need transform-es2015-block-scoped-functions ?
+      // TODO is this the correct place for this ?
+      plugins.push("transform-es2015-block-scoping");
+
+      // TODO use babel-preset-babili ?
+      // TODO use "minify-dead-code-elimination" ?
+      plugins.push("minify-constant-folding");
+
+      if (options.optimizations.removeDeadCode) {
         // TODO is this the correct `code` to use ?
         info = $babel.transformFromAst(info.ast, null, {
           babelrc: false,
@@ -252,6 +273,10 @@ module.exports = function (options) {
           sourceMaps: false,
           plugins: plugins
         });
+
+        plugins = [
+          [$deadCode, { debug: options.debug }]
+        ];
       }
 
       // TODO is this the correct `code` to use ?
@@ -260,18 +285,7 @@ module.exports = function (options) {
         code: true,
         ast: false,
         sourceMaps: true,
-        plugins: [
-          $removeSequence,
-          // TODO better way of handling this ?
-          $propagate,
-          // TODO use babel-preset-babili ?
-          "minify-constant-folding",
-          "minify-dead-code-elimination",
-          // TODO is this the correct place for this ?
-          "transform-do-expressions",
-          // TODO do we need transform-es2015-block-scoped-functions ?
-          "transform-es2015-block-scoping"
-        ]
+        plugins: plugins
       });
     }
   };
