@@ -1,18 +1,17 @@
 "use strict";
 
-
 module.exports = function (babel) {
   return {
     visitor: {
-      VariableDeclaration: {
-        // TODO should this use enter or exit ?
-        exit: function (path, state) {
-          var node = path.node;
+      VariableDeclaration: function (path, state) {
+        var parent = path.parentPath.node;
+        var node = path.node;
 
+        // TODO is this correct ?
+        if (parent.type !== "ForStatement" &&
+            parent.type !== "ForInStatement") {
           if (node.declarations.length > 1) {
-            var last = node.declarations.pop();
-
-            path.insertBefore(node.declarations.map(function (x) {
+            path.replaceWithMultiple(node.declarations.map(function (x) {
               // TODO loc
               return {
                 type: "VariableDeclaration",
@@ -20,8 +19,6 @@ module.exports = function (babel) {
                 declarations: [x]
               };
             }));
-
-            node.declarations = [last];
           }
         }
       }

@@ -11,7 +11,9 @@ export default {
       debug: true,
       optimizations: {
         uncurry: true,
-        inline: true
+        inline: true,
+        removeDeadCode: true,
+        assumePureVars: true
       }
     }),
     //sourcemaps()

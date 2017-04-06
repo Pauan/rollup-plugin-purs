@@ -364,6 +364,7 @@ module.exports = function (babel) {
 
             if (length >= 1) {
               for (var i = 0; i < length - 1; ++i) {
+                // TODO use assumePureVars ?
                 if (!$util.isPure(body[i], false)) {
                   return;
                 }
@@ -381,24 +382,29 @@ module.exports = function (babel) {
       // TODO does this preserve evaluation order ?
       VariableDeclaration: {
         exit: function (path, state) {
+          var parent = path.parentPath.node;
           var node = path.node;
 
-          node.declarations.forEach(function (node) {
-            if (node.init !== null &&
-                node.init.type === "DoExpression") {
-              var body = node.init.body.body;
+          // TODO is this correct ?
+          if (parent.type !== "ForStatement" &&
+              parent.type !== "ForInStatement") {
+            node.declarations.forEach(function (node) {
+              if (node.init !== null &&
+                  node.init.type === "DoExpression") {
+                var body = node.init.body.body;
 
-              if (body.length >= 1) {
-                var last = body[body.length - 1];
+                if (body.length >= 1) {
+                  var last = body[body.length - 1];
 
-                if (last.type === "ExpressionStatement") {
-                  node.init = last.expression;
+                  if (last.type === "ExpressionStatement") {
+                    node.init = last.expression;
 
-                  path.insertBefore(body.slice(0, -1));
+                    path.insertBefore(body.slice(0, -1));
+                  }
                 }
               }
-            }
-          });
+            });
+          }
         }
       },
       ReturnStatement: {
@@ -473,6 +479,7 @@ module.exports = function (babel) {
 
                   if (binding.constant &&
                       binding.references <= 1 &&
+                      // TODO use assumePureVars ?
                       $util.isPure(arg, false)) {
                     // TODO is this correct ?
                     replace.push(JSON.parse(JSON.stringify(arg)));
@@ -525,6 +532,7 @@ module.exports = function (babel) {
               for (var i = callee.params.length; i < length; ++i) {
                 var arg = args[i];
 
+                // TODO use assumePureVars ?
                 if (!$util.isPure(arg, false)) {
                   statements.push($util.expressionStatement(JSON.parse(JSON.stringify(arg))));
                 }

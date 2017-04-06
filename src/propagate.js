@@ -27,6 +27,7 @@ function isSimple(x) {
       // TODO make this more efficient ?
       // TODO only require purity for all but the last element
       // TODO even if the expressions aren't pure, we can still return the last element
+      // TODO use assumePureVars ?
       if (x.expressions.every(function (x) { return $util.isPure(x, false); }) && isSimple(last)) {
         return last;
 

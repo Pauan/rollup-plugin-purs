@@ -104,6 +104,7 @@ function getUncurriedCall(path, node) {
 
 function pushAll(path, statements, flattened, a) {
   a.forEach(function (x) {
+    // TODO use assumePureVars ?
     if ($util.isPure(x, false)) {
       flattened.push(x);
 

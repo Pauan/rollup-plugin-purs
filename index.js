@@ -14,7 +14,6 @@ var $removeSequence = require("./src/remove-sequence");
 var $removeIIFE = require("./src/remove-iife");
 var $typeclass = require("./src/typeclass");
 var $deadCode = require("./src/dead-code");
-var $splitVars = require("./src/split-vars");
 
 
 function pursPath(options, path) {
@@ -71,6 +70,10 @@ module.exports = function (options) {
     options.optimizations.removeDeadCode = true;
   }
 
+  if (options.optimizations.assumePureVars == null) {
+    options.optimizations.assumePureVars = true;
+  }
+
   var filter = $utils.createFilter(options.include, options.exclude);
 
   var entry = null;
@@ -81,7 +84,8 @@ module.exports = function (options) {
     // TODO hacky
     options: function (rollup) {
       // We use a better treeshaking algorithm than Rollup, so we disable Rollup's treeshaking for faster speed
-      rollup.treeshake = false;
+      // TODO set this to false later
+      rollup.treeshake = true;
 
       if (options.runMain &&
           rollup.entry != null &&
@@ -265,8 +269,6 @@ module.exports = function (options) {
       // TODO use "minify-dead-code-elimination" ?
       plugins.push("minify-constant-folding");
 
-      plugins.push($splitVars);
-
       if (options.optimizations.removeDeadCode) {
         // TODO is this the correct `code` to use ?
         info = $babel.transformFromAst(info.ast, null, {
@@ -278,9 +280,10 @@ module.exports = function (options) {
         });
 
         plugins = [
-          $propagate,
-
-          [$deadCode, { debug: options.debug }]
+          [$deadCode, {
+            debug: options.debug,
+            assumePureVars: options.optimizations.assumePureVars
+          }]
         ];
       }
 
