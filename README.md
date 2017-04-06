@@ -52,6 +52,8 @@ Here are the file sizes for the `examples/tab-organizer` program:
 
 6. The final bundle is in the `bundle.js` file. Enjoy the smaller file size and optimizations!
 
+You can see an example program in the `examples/pulp init` folder.
+
 
 ## Options
 
