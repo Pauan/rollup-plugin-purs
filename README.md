@@ -16,20 +16,19 @@ Here are the file sizes for the `examples/tab-organizer` program:
 
 ## Installation
 
-1.
-
-   ```bash
-   npm install --save-dev rollup
-   npm install --save-dev rollup-plugin-purs
-   ```
-
-2. Add the following to your `package.json`:
+1. Add the following to your `package.json`:
 
    ```json
+   "devDependencies": {
+     "rollup": "^0.41.6",
+     "rollup-plugin-purs": "^1.0.33"
+   },
    "scripts": {
      "build": "rollup"
    }
    ```
+
+2. Run `npm install`
 
 3. Place this code into a file called `rollup.config.js`:
 
