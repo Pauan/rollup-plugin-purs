@@ -24,7 +24,7 @@ npm install --save-dev rollup-plugin-purs
 
 ## Usage
 
-1.  Here is an example configuration:
+1. Here is an example configuration:
 
    ```js
    import purs from "rollup-plugin-purs";
