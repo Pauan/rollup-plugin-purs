@@ -17,29 +17,36 @@ Here are the file sizes for the `examples/tab-organizer` program:
 ## Installation
 
 ```bash
+npm install --save-dev rollup
 npm install --save-dev rollup-plugin-purs
 ```
 
 
 ## Usage
 
-Here is an example configuration:
+1.  Here is an example configuration:
 
-```js
-import purs from "rollup-plugin-purs";
+   ```js
+   import purs from "rollup-plugin-purs";
 
-export default {
-  entry: "src/Main.purs",
-  dest: "bundle.js",
-  format: "iife",
-  sourceMap: true,
-  plugins: [
-    purs()
-  ]
-};
-```
+   export default {
+     entry: "src/Main.purs",
+     dest: "bundle.js",
+     format: "iife",
+     sourceMap: true,
+     plugins: [
+       purs()
+     ]
+   };
+   ```
 
-This plugin does **not** compile PureScript code, so you will first need to run `pulp build` (or equivalent) before using this plugin.
+   Place the above code into a file called `rollup.config.js`
+
+2. This plugin does **not** compile PureScript code, so you will need to run `pulp build` (or equivalent)
+
+3. Run `rollup`
+
+4. The final bundle is in the `bundle.js` file. Enjoy the smaller file size and optimizations!
 
 
 ## Options
@@ -52,7 +59,7 @@ purs({
   exclude: undefined,      // Glob pattern for files/directories to exclude
   outputDir: "output",     // Directory where the PureScript files are located
   runMain: true,           // Whether to call the `main` function or not
-  debug: false,            // Displays additional warnings and statistics
+  debug: true,             // Displays additional warnings and statistics
   optimizations: {
     uncurry: true,         // Whether to apply the uncurrying optimization or not
     inline: true,          // Whether to inline some functions or not

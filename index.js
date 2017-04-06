@@ -39,7 +39,7 @@ module.exports = function (options) {
   }
 
   if (options.debug == null) {
-    options.debug = false;
+    options.debug = true;
   }
 
   if (options.optimizations == null) {
