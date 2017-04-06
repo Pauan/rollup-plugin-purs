@@ -42,7 +42,7 @@ npm install --save-dev rollup-plugin-purs
 
    Place the above code into a file called `rollup.config.js`
 
-2. This plugin does **not** compile PureScript code, so you will need to run `pulp build` (or equivalent)
+2. This plugin does **not** compile PureScript code, so you will need to run `pulp build -- --source-maps` (or equivalent)
 
 3. Run `rollup`
 
@@ -117,7 +117,7 @@ These are the optimizations which can be turned on or off:
 
 In addition to the above optimizations, there are some optimizations which are *always* applied:
 
-* Constant propagation/folding
+* Constant propagation / folding
 
 
 ## Planned optimizations
