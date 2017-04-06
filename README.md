@@ -131,6 +131,13 @@ In addition to the above optimizations, there are some optimizations which are *
 * Common subexpression elimination
 
 
+## Converting from CommonJS to ES6 modules
+
+This package also contains a `convert-commonjs` program which can be used to convert a file from CommonJS to ES6 modules.
+
+You can run `node_modules/.bin/convert-commonjs input.js > output.js` which will take the `input.js` file (which is CommonJS) and will output to the `output.js` file (which is ES6 modules).
+
+
 ## License
 
 MIT
