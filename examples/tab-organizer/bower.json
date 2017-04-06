@@ -1,5 +1,5 @@
 {
-  "name": "purescript-tree-shaking",
+  "name": "tab-organizer",
   "ignore": [
     "**/.*",
     "node_modules",
