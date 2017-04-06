@@ -16,7 +16,9 @@ Here are the file sizes for the `examples/tab-organizer` program:
 
 ## Installation
 
-1. ```bash
+1.
+
+   ```bash
    npm install --save-dev rollup
    npm install --save-dev rollup-plugin-purs
    ```
