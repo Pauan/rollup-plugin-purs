@@ -62,8 +62,7 @@ function canInlineStatement(node) {
            canInlineStatement(node.body);
 
   } else if (node.type === "ForInStatement" ||
-             node.type === "ForOfStatement" ||
-             node.type === "ForAwaitStatement") {
+             node.type === "ForOfStatement") {
     return canInlineStatement(node.left) && canInlineStatement(node.body);
 
   } else {
@@ -387,7 +386,8 @@ module.exports = function (babel) {
 
           // TODO is this correct ?
           if (parent.type !== "ForStatement" &&
-              parent.type !== "ForInStatement") {
+              parent.type !== "ForInStatement" &&
+              parent.type !== "ForOfStatement") {
             node.declarations.forEach(function (node) {
               if (node.init !== null &&
                   node.init.type === "DoExpression") {

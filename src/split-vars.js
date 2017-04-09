@@ -9,7 +9,8 @@ module.exports = function (babel) {
 
         // TODO is this correct ?
         if (parent.type !== "ForStatement" &&
-            parent.type !== "ForInStatement") {
+            parent.type !== "ForInStatement" &&
+            parent.type !== "ForOfStatement") {
           if (node.declarations.length > 1) {
             path.replaceWithMultiple(node.declarations.map(function (x) {
               // TODO loc

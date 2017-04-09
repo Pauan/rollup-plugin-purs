@@ -48,17 +48,76 @@ function isPureNew(scope, expression) {
 }
 
 
+// TODO directives
+function visitBlockStatement(path, state) {
+  var node = path.node;
+
+  var length = node.body.length;
+
+  node.body = node.body.filter(function (node) {
+    // TODO is this correct ?
+    return !isPure(path.scope, node);
+  });
+
+  state.deadExpressions += (length - node.body.length);
+}
+
+
 // TODO ClassDeclaration
 // TODO ImportDeclaration ?
 // TODO ExportNamedDeclaration
 // TODO ExportDefaultDeclaration
-// TODO assignment shouldn't count as being used unless the right side is impure
+// TODO unused function arguments should be removed
+// TODO remove LabeledStatement if the label isn't used ?
+// TODO remove unused cases from SwitchStatement ?
+// TODO remove unused variables from ForStatement and ForInStatement ?
+// TODO remove unused quasis and expressions from TemplateLiteral ?
+// TODO remove unused properties from ObjectPattern ?
+// TODO remove unused elements ArrayPattern ?
+// TODO remove unused RestElement ?
+// TODO remove unused AssignmentPattern ?
 var visitor = {
   Program: {
+    enter: visitBlockStatement,
     exit: function (path, state) {
       state.after.forEach(function (f) {
         f();
       });
+    }
+  },
+  BlockStatement: visitBlockStatement,
+  SwitchCase: function (path, state) {
+    var node = path.node;
+
+    var length = node.consequent.length;
+
+    node.consequent = node.consequent.filter(function (node) {
+      // TODO is this correct ?
+      return !isPure(path.scope, node);
+    });
+
+    state.deadExpressions += (length - node.consequent.length);
+  },
+  SequenceExpression: function (path, state) {
+    var node = path.node;
+
+    var length = node.expressions.length;
+
+    var last = node.expressions.pop();
+
+    var expressions = node.expressions.filter(function (node) {
+      // TODO is this correct ?
+      return !isPure(path.scope, node);
+    });
+
+    expressions.push(last);
+
+    node.expressions = expressions;
+
+    state.deadExpressions += (length - node.expressions.length);
+
+    if (node.expressions.length === 1) {
+      path.replaceWith(node.expressions[0]);
     }
   },
   ReferencedIdentifier: function (path, state) {
@@ -79,6 +138,39 @@ var visitor = {
       }
     }
   },
+  UpdateExpression: function (path, state) {
+    var parent = path.parentPath.node;
+
+    // TODO is this correct ?
+    if (parent.type === "ExpressionStatement") {
+      var node = path.node;
+
+      if (node.argument.type === "Identifier") {
+        var binding = path.scope.getBinding(node.argument.name);
+
+        if (binding != null) {
+          state.after.push(function () {
+            if (!binding.rollup_plugin_used) {
+              // TODO what if the UpdateExpression is inside of an expression ?
+              path.remove();
+            }
+          });
+
+          if (!binding.rollup_plugin_used) {
+            if (binding.rollup_plugin_onUse == null) {
+              binding.rollup_plugin_onUse = [];
+            }
+
+            binding.rollup_plugin_onUse.push(function () {
+              path.traverse(visitor, state);
+            });
+
+            path.skip();
+          }
+        }
+      }
+    }
+  },
   //  var foo = pure; foo = pure;      -->
   //  var foo = pure; foo = impure;    -->  impure;
   //  var foo = impure; foo = pure;    -->  impure;
@@ -86,24 +178,28 @@ var visitor = {
   AssignmentExpression: function (path, state) {
     var node = path.node;
 
-    // TODO make it work with the other operators ?
+    // TODO handle other operators
     if (node.operator === "=" &&
         node.left.type === "Identifier") {
       var binding = path.scope.getBinding(node.left.name);
 
       if (binding != null) {
+        var parent = path.parentPath.node;
+
         // TODO is this correct ?
         // TODO use assumePureVars
-        var pure = isPure(path.scope, node.right);
+        var pure = (parent.type === "ExpressionStatement") && isPure(path.scope, node.right);
 
         state.after.push(function () {
           if (!binding.rollup_plugin_used) {
             if (pure) {
-              // TODO what if the AssignmentExpression is inside of an expression ?
+              // TODO should this count even if the right side is impure ?
+              ++state.deadExpressions;
+
               path.remove();
 
             } else {
-              path.replaceWith($util.expressionStatement(node.right));
+              path.replaceWith(node.right);
             }
           }
         });
@@ -116,10 +212,12 @@ var visitor = {
           }
 
           binding.rollup_plugin_onUse.push(function () {
+            // TODO is this correct ?
             path.get("right").traverse(visitor, state);
           });
 
         } else {
+          // TODO is this correct ?
           path.get("right").traverse(visitor, state);
         }
       }
@@ -132,7 +230,8 @@ var visitor = {
 
     // TODO is this correct ?
     if (parent.type !== "ForStatement" &&
-        parent.type !== "ForInStatement") {
+        parent.type !== "ForInStatement" &&
+        parent.type !== "ForOfStatement") {
       //console.assert(declarations.length === 1);
 
       if (declarations.length > 1) {
@@ -274,12 +373,7 @@ var visitor = {
       }
 
       binding.rollup_plugin_onUse.push(function () {
-        // TODO is this needed ?
-        path.get("params").forEach(function (path) {
-          path.traverse(visitor, state);
-        });
-
-        path.get("body").traverse(visitor, state);
+        path.traverse(visitor, state);
       });
 
       path.skip();
@@ -296,6 +390,7 @@ module.exports = function (babel) {
       this.pure = 0;
       this.impure = 0;
       this.ignored = 0;
+      this.deadExpressions = 0;
       this.after = [];
     },
     post: function () {
@@ -308,6 +403,7 @@ module.exports = function (babel) {
         console.info(" * Pure variables: " + this.pure);
         console.info(" * Impure variables: " + this.impure);
         console.info(" * Ignored variables: " + this.ignored);
+        console.info(" * Unused pure expressions: " + this.deadExpressions);
       }
     },
     visitor: visitor

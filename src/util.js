@@ -149,10 +149,8 @@ exports.print = function (node) {
 // TODO ForStatement ?
 // TODO ForInStatement ?
 // TODO ForOfStatement ?
-// TODO ForAwaitStatement ?
 // TODO ObjectPattern ?
 // TODO ArrayPattern ?
-// TODO RestElement ?
 // TODO AssignmentPattern ?
 function isPure(node, strict) {
       // TODO this is only needed for ArrayExpression
@@ -198,8 +196,7 @@ function isPure(node, strict) {
     return isPure(node.key, strict) &&
            isPure(node.value, strict);
 
-  } else if (node.type === "RestProperty" ||
-             node.type === "SpreadProperty" ||
+  } else if (node.type === "RestElement" ||
              node.type === "SpreadElement") {
     return isPure(node.argument, strict);
 

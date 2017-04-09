@@ -123,7 +123,6 @@ module.exports = function (babel) {
       ForStatement: blockStatementBody,
       ForInStatement: blockStatementBody,
       ForOfStatement: blockStatementBody,
-      ForAwaitStatement: blockStatementBody,
 
       IfStatement: function (path) {
         var node = path.node;
