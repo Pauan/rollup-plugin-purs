@@ -48,19 +48,6 @@ function isPureNew(scope, expression) {
 }
 
 
-function setPurity(state, binding, expression) {
-  if (binding.rollup_plugin_purs_is_pure == null) {
-    // TODO is this scope correct ?
-    if (state.opts.assumePureVars || isPure(binding.scope, expression)) {
-      binding.rollup_plugin_purs_is_pure = true;
-
-    } else {
-      binding.rollup_plugin_purs_is_pure = false;
-    }
-  }
-}
-
-
 // TODO ClassDeclaration
 // TODO ImportDeclaration ?
 // TODO ExportNamedDeclaration
@@ -84,26 +71,10 @@ var visitor = {
       if (!binding.rollup_plugin_used) {
         binding.rollup_plugin_used = true;
 
-        var bindingPath = binding.path;
-
-        var declaration = bindingPath.node;
-
-        if (declaration.type === "VariableDeclarator") {
-          setPurity(state, binding, declaration.init);
-
-          if (binding.rollup_plugin_purs_is_pure) {
-            bindingPath.traverse(visitor, state);
-          }
-
-        } else if (declaration.type === "FunctionDeclaration") {
-          binding.rollup_plugin_purs_is_pure = true;
-
-          // TODO is this needed ?
-          bindingPath.get("params").forEach(function (path) {
-            path.traverse(visitor, state);
+        if (binding.rollup_plugin_onUse != null) {
+          binding.rollup_plugin_onUse.forEach(function (f) {
+            f();
           });
-
-          bindingPath.get("body").traverse(visitor, state);
         }
       }
     }
@@ -198,6 +169,9 @@ var visitor = {
           } else {
             binding.rollup_plugin_seen_declarator = true;
 
+            // TODO is this scope correct ?
+            var isPureVar = state.opts.assumePureVars || isPure(binding.scope, node.init);
+
             state.after.push(function () {
               if (binding.rollup_plugin_used) {
                 ++state.live;
@@ -205,7 +179,7 @@ var visitor = {
               } else {
                 ++state.dead;
 
-                if (binding.rollup_plugin_purs_is_pure) {
+                if (isPureVar) {
                   path.remove();
 
                 } else {
@@ -214,9 +188,15 @@ var visitor = {
               }
             });
 
-            setPurity(state, binding, node.init);
+            if (!binding.rollup_plugin_used && isPureVar) {
+              if (binding.rollup_plugin_onUse == null) {
+                binding.rollup_plugin_onUse = [];
+              }
 
-            if (binding.rollup_plugin_purs_is_pure) {
+              binding.rollup_plugin_onUse.push(function () {
+                declaration.traverse(visitor, state);
+              });
+
               path.skip();
             }
           }
@@ -256,9 +236,22 @@ var visitor = {
       }
     });
 
-    binding.rollup_plugin_purs_is_pure = true;
+    if (!binding.rollup_plugin_used) {
+      if (binding.rollup_plugin_onUse == null) {
+        binding.rollup_plugin_onUse = [];
+      }
 
-    path.skip();
+      binding.rollup_plugin_onUse.push(function () {
+        // TODO is this needed ?
+        path.get("params").forEach(function (path) {
+          path.traverse(visitor, state);
+        });
+
+        path.get("body").traverse(visitor, state);
+      });
+
+      path.skip();
+    }
   }
 };
 
