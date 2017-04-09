@@ -138,14 +138,12 @@ function exportVar(state, body, path, identifier, expression, loc) {
     }
   }
 
-  if (isUndefined(path, identifier.name)) {
-    exportTempVar(state, body, path, identifier, expression, loc);
-
-  } else {
-    // TODO maybe this should warn instead ?
+  if (!isUndefined(path, identifier.name)) {
     // TODO is this the correct loc ?
-    state.opts.error("Variable " + identifier.name + " already exists", identifier.start);
+    state.opts.warn("Variable " + identifier.name + " already exists", identifier.start);
   }
+
+  exportTempVar(state, body, path, identifier, expression, loc);
 }
 
 

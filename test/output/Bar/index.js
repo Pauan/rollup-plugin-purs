@@ -16,6 +16,17 @@ var bar = "bar4";
 
 console.log(exports.null);
 
+
+var duplicate = 1;
+
+var duplicatePolyfill = 2;
+
+exports.duplicate =
+  (Math.random() < 0.5
+    ? duplicate
+    : duplicatePolyfill);
+
+
 exports.bar1 = "bar1";
 exports.qux = "bar2";
 exports["uh"] = "bar3";
