@@ -78,6 +78,44 @@ purs({
 The default options should be fine for most use cases.
 
 
+## Optimizations
+
+These are the optimizations which can be turned on or off:
+
+* `uncurry`
+
+  Replaces curried functions with uncurried functions, for improved performance and smaller file size.
+
+* `inline`
+
+  Inlines some functions, which can increase performance and decrease the file size.
+
+  It also inlines typeclass instance methods when it can. This can dramatically improve performance and reduce the file size.
+
+* `removeDeadCode`
+
+  Removes code which is not used. This dramatically reduces the file size.
+
+* `assumePureVars`
+
+  When there is a variable assignment like `var foo = ...` it will assume that the `...` is pure. When used in combination with `removeDeadCode`, this significantly reduces the file size.
+
+  If `assumePureVars` is `false`, then `rollup-plugin-purs` only removes unused variables if it can prove that the variable is pure. But sometimes it won't remove unused variables, because it's not smart enough to realize that the variable is pure.
+
+  If `assumePureVars` is `true`, then `rollup-plugin-purs` can remove all unused variables, even if it can't prove that the variable is pure.
+
+  PureScript variables are always pure, so `assumePureVars` is safe. But if you do weird things with the FFI, or if you use an unsafe PureScript function, or if you import a JavaScript library, then `assumePureVars` might break your program.
+
+In addition to the above optimizations, there are some optimizations which are *always* applied:
+
+* Constant propagation / folding
+
+
+## Planned optimizations
+
+* Common subexpression elimination
+
+
 ## Comment pragmas
 
 You can disable certain warnings by including a special comment in your code:
@@ -97,38 +135,6 @@ You can disable certain warnings by including a special comment in your code:
 Each comment disables a specific warning.
 
 The comments must be exactly the same as above, and they must be placed at the top-level of your code, with zero spaces to the left of the comment.
-
-
-## Optimizations
-
-These are the optimizations which can be turned on or off:
-
-* `uncurry`
-
-  Replace curried functions with uncurried functions, for improved performance and smaller file size
-
-* `inline`
-
-  Inline some functions, which can increase performance and decrease the file size.
-
-  It also inlines typeclass instance methods when it can.
-
-* `removeDeadCode`
-
-  Removes code which is not used. This dramatically reduces the file size.
-
-* `assumePureVars`
-
-  Assumes that any variable assignment like `var foo = ...` is pure. When used in combination with `removeDeadCode`, this significantly reduces the file size.
-
-In addition to the above optimizations, there are some optimizations which are *always* applied:
-
-* Constant propagation / folding
-
-
-## Planned optimizations
-
-* Common subexpression elimination
 
 
 ## Converting from CommonJS to ES6 modules
