@@ -21,7 +21,7 @@ Here are the file sizes for the `examples/tab-organizer` program:
    ```json
    "devDependencies": {
      "rollup": "^0.41.6",
-     "rollup-plugin-purs": "^1.0.34"
+     "rollup-plugin-purs": "^1.0.35"
    },
    "scripts": {
      "build": "rollup --config"
