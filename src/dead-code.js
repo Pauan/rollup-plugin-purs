@@ -61,7 +61,7 @@ var visitor = {
       });
     }
   },
-  Identifier: function (path, state) {
+  ReferencedIdentifier: function (path, state) {
     var node = path.node;
 
     var binding = path.scope.getBinding(node.name);
@@ -83,9 +83,10 @@ var visitor = {
   //  var foo = pure; foo = impure;    -->  impure;
   //  var foo = impure; foo = pure;    -->  impure;
   //  var foo = impure; foo = impure;  -->  impure; impure;
-  /*AssignmentExpression: function (path, state) {
+  AssignmentExpression: function (path, state) {
     var node = path.node;
 
+    // TODO make it work with the other operators ?
     if (node.operator === "=" &&
         node.left.type === "Identifier") {
       var binding = path.scope.getBinding(node.left.name);
@@ -109,12 +110,21 @@ var visitor = {
 
         path.skip();
 
-        if (!pure) {
+        if (!binding.rollup_plugin_used && pure) {
+          if (binding.rollup_plugin_onUse == null) {
+            binding.rollup_plugin_onUse = [];
+          }
+
+          binding.rollup_plugin_onUse.push(function () {
+            path.get("right").traverse(visitor, state);
+          });
+
+        } else {
           path.get("right").traverse(visitor, state);
         }
       }
     }
-  },*/
+  },
   VariableDeclaration: function (path, state) {
     var parent = path.parentPath.node;
 
@@ -152,7 +162,27 @@ var visitor = {
 
           console.assert(binding != null);
 
+          var rightPure = isPure(binding.scope, node.init);
+
+          // TODO this causes it to be counted multiple times per binding
+          if (rightPure) {
+            ++state.pure;
+
+          } else {
+            ++state.impure;
+          }
+
           if (binding.rollup_plugin_seen_declarator) {
+            // TODO this causes it to be counted multiple times per binding
+            state.after.push(function () {
+              if (binding.rollup_plugin_used) {
+                ++state.live;
+
+              } else {
+                ++state.dead;
+              }
+            });
+
             if (node.init != null) {
               path.replaceWith($util.expressionStatement($util.setLoc({
                 type: "AssignmentExpression",
@@ -170,7 +200,7 @@ var visitor = {
             binding.rollup_plugin_seen_declarator = true;
 
             // TODO is this scope correct ?
-            var isPureVar = state.opts.assumePureVars || isPure(binding.scope, node.init);
+            var pure = state.opts.assumePureVars || rightPure;
 
             state.after.push(function () {
               if (binding.rollup_plugin_used) {
@@ -179,7 +209,7 @@ var visitor = {
               } else {
                 ++state.dead;
 
-                if (isPureVar) {
+                if (pure) {
                   path.remove();
 
                 } else {
@@ -188,7 +218,7 @@ var visitor = {
               }
             });
 
-            if (!binding.rollup_plugin_used && isPureVar) {
+            if (!binding.rollup_plugin_used && pure) {
               if (binding.rollup_plugin_onUse == null) {
                 binding.rollup_plugin_onUse = [];
               }
@@ -224,6 +254,8 @@ var visitor = {
     console.assert(!binding.rollup_plugin_seen_declarator);
 
     binding.rollup_plugin_seen_declarator = true;
+
+    ++state.pure;
 
     state.after.push(function () {
       if (binding.rollup_plugin_used) {
@@ -262,6 +294,8 @@ module.exports = function (babel) {
       this.live = 0;
       this.dead = 0;
       this.ignored = 0;
+      this.pure = 0;
+      this.impure = 0;
       this.after = [];
     },
     post: function () {
@@ -271,6 +305,8 @@ module.exports = function (babel) {
         console.info("* Debug dead code");
         console.info(" * Live variables: " + this.live);
         console.info(" * Dead variables: " + this.dead);
+        console.info(" * Pure variables: " + this.pure);
+        console.info(" * Impure variables: " + this.impure);
         console.info(" * Ignored variables: " + this.ignored);
       }
     },
