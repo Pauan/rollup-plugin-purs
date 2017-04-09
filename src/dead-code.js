@@ -293,16 +293,16 @@ module.exports = function (babel) {
     pre: function () {
       this.live = 0;
       this.dead = 0;
-      this.ignored = 0;
       this.pure = 0;
       this.impure = 0;
+      this.ignored = 0;
       this.after = [];
     },
     post: function () {
       if (this.opts.debug) {
         // TODO does this go to stdout or stderr ?
         console.info("");
-        console.info("* Debug dead code");
+        console.info("* Dead code statistics");
         console.info(" * Live variables: " + this.live);
         console.info(" * Dead variables: " + this.dead);
         console.info(" * Pure variables: " + this.pure);

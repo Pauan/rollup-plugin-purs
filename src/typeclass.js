@@ -144,8 +144,8 @@ module.exports = function (babel) {
       if (this.opts.debug) {
         // TODO does this go to stdout or stderr ?
         console.info("");
-        console.info("* Debug typeclass inlining");
-        console.info(" * Typeclass instances inlined: " + this.inlined);
+        console.info("* Typeclass statistics");
+        console.info(" * Inlined: " + this.inlined);
       }
     },
     visitor: {

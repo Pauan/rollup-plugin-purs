@@ -142,7 +142,7 @@ module.exports = function (babel) {
       if (this.opts.debug) {
         // TODO does this go to stdout or stderr ?
         console.info("");
-        console.info("* Debug uncurrying");
+        console.info("* Uncurrying statistics");
         console.info(" * Curried function calls (saturated): " + this.uncurriedSaturated);
         console.info(" * Curried function calls (unsaturated): " + this.uncurriedUnsaturated);
         console.info(" * Curried function calls (can't uncurry): " + this.cantUncurry);

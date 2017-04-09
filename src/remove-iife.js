@@ -341,7 +341,7 @@ module.exports = function (babel) {
       if (this.opts.debug) {
         // TODO does this go to stdout or stderr ?
         console.info("");
-        console.info("* Debug IIFE");
+        console.info("* IIFE statistics");
         console.info(" * Removed: " + this.removed);
         console.info(" * Not removed: " + this.unremoved);
       }

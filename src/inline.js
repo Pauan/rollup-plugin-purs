@@ -94,7 +94,7 @@ module.exports = function (babel) {
       if (this.opts.debug) {
         // TODO does this go to stdout or stderr ?
         console.info("");
-        console.info("* Debug inlining");
+        console.info("* Inlining statistics");
         console.info(" * Function calls (inlined): " + this.inlined);
         console.info(" * Function calls (not inlined): " + this.uninlined);
         console.info(" * Function calls (can't inline): " + this.cantInlined);
