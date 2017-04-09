@@ -63,7 +63,7 @@ These are the default options:
 purs({
   include: undefined,      // Glob pattern for files/directories to include
   exclude: undefined,      // Glob pattern for files/directories to exclude
-  outputDir: "output",     // Directory where the PureScript files are located
+  buildDir: "output",      // Directory where the `purs compile` files are located
   runMain: true,           // Whether to call the `main` function or not
   debug: true,             // Displays additional warnings and statistics
   optimizations: {

@@ -18,7 +18,7 @@ var $deadCode = require("./src/dead-code");
 
 function pursPath(options, path) {
   // TODO should this use resolve ?
-  return $path.resolve($path.join(options.outputDir, path, "index.js"));
+  return $path.resolve($path.join(options.buildDir, path, "index.js"));
 }
 
 
@@ -30,8 +30,13 @@ module.exports = function (options) {
     options = {};
   }
 
-  if (options.outputDir == null) {
-    options.outputDir = "output";
+  if (options.outputDir != null) {
+    console.warn("rollup-plugin-purs: outputDir option is deprecated, use buildDir instead");
+    options.buildDir = options.outputDir;
+  }
+
+  if (options.buildDir == null) {
+    options.buildDir = "output";
   }
 
   if (options.runMain == null) {
@@ -140,7 +145,7 @@ module.exports = function (options) {
                 resolve(null);
 
               // TODO is this correct ?
-              // TODO only do this for the outputDir ?
+              // TODO only do this for the buildDir ?
               } else if (stat.isDirectory()) {
                 resolve($path.join(fullPath, "index.js"));
 
