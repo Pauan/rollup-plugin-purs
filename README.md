@@ -1,6 +1,6 @@
 # rollup-plugin-purs
 
-Bundle PureScript modules with Rollup
+Bundles PureScript modules with Rollup
 
 
 ## Why Rollup?
@@ -102,7 +102,7 @@ These are the optimizations which can be turned on or off:
 
   If `assumePureVars` is `false`, then `rollup-plugin-purs` only removes unused variables if it can prove that the variable is pure. But sometimes it won't remove unused variables, because it's not smart enough to realize that the variable is pure.
 
-  If `assumePureVars` is `true`, then `rollup-plugin-purs` can remove all unused variables, even if it can't prove that the variable is pure.
+  If `assumePureVars` is `true`, then `rollup-plugin-purs` will remove all unused variables, even if it can't prove that the variable is pure.
 
   PureScript variables are always pure, so `assumePureVars` is safe. But if you do weird things with the FFI, or if you use an unsafe PureScript function, or if you import a JavaScript library, then `assumePureVars` might break your program.
 
