@@ -16,7 +16,7 @@ module Pauan.Prelude
   , module Pauan.Math
   , module Pauan.Result
   , module Data.Int
-  , module Data.Filterable
+  --, module Data.Filterable
   , module Data.Either
   , (<<)
   , (>>)
@@ -59,13 +59,14 @@ import Prelude
   , not
   , top
   , const
+  , discard
   )
 
 import Data.Either (Either(..))
-import Data.Filterable (filter, filterMap, partition, partitionMap)
+--import Data.Filterable (filter, filterMap, partition, partitionMap)
 import Data.Traversable (sequence)
 import Data.Foldable (for_)
-import Data.Array ((..), length, filterM)
+import Data.Array ((..), length, filterA)
 import Data.Maybe (Maybe(Nothing, Just), fromMaybe, isJust, maybe)
 import Data.Int (toNumber, round)
 import Control.Monad.Eff (Eff)
@@ -120,16 +121,16 @@ ifJust yes _  (Just _) = yes
 ifJust _   no Nothing = no
 
 
-mapIf :: forall a f. (Prelude'.Functor f) => a -> a -> f Boolean -> f a
+mapIf :: forall a f. Prelude'.Functor f => a -> a -> f Boolean -> f a
 mapIf yes no = map (\a -> if a then yes else no)
 
 
 -- TODO should this use mempty or something else ?
-mapIfTrue :: forall a f. (Monoid'.Monoid a, Prelude'.Functor f) => a -> f Boolean -> f a
+mapIfTrue :: forall a f. Monoid'.Monoid a => Prelude'.Functor f => a -> f Boolean -> f a
 mapIfTrue yes = mapIf yes Monoid'.mempty
 
 
-map2 :: forall a b c f. (Apply f) => f a -> f b -> (a -> b -> c) -> f c
+map2 :: forall a b c f. Apply f => f a -> f b -> (a -> b -> c) -> f c
 map2 a b f = Prelude'.apply (map f a) b
 
 

@@ -28,15 +28,15 @@ import Data.Function.Uncurried (Fn2, Fn3, Fn4, Fn5)
 
 
 -- TODO use purescript-dom
-foreign import data DOMElement :: *
+foreign import data DOMElement :: Type
 
-foreign import data Event :: *
+foreign import data Event :: Type
 
-foreign import data HTML :: *
+foreign import data HTML :: Type
 
-foreign import data State :: *
+foreign import data State :: Type
 
-foreign import data Trait :: *
+foreign import data Trait :: Type
 
 
 type Observe eff a = (a -> Eff eff Unit) -> View a -> Eff eff Resource

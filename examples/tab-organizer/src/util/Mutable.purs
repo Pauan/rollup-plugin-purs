@@ -1,16 +1,16 @@
 module Pauan.Mutable (MUTABLE, Mutable, make, get, set, modify) where
 
 import Prelude
-import Control.Monad.Eff (Eff)
+import Control.Monad.Eff (kind Effect, Eff)
 import Pauan.View (class ToView, View)
 import Pauan.Events as Events
 import Pauan.Transaction (Transaction, TransactionId)
 import Pauan.Resource (Resource)
 
 
-foreign import data MUTABLE :: !
+foreign import data MUTABLE :: Effect
 
-foreign import data Mutable :: * -> *
+foreign import data Mutable :: Type -> Type
 
 -- TODO Should this have an effect of MUTABLE ?
 -- TODO what should it use for the effect type of Events ?

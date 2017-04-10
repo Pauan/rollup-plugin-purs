@@ -8,7 +8,7 @@ import Data.Function.Uncurried (Fn3, runFn3, mkFn3)
 import Control.Monad.Eff.Exception (Error)
 
 
-foreign import data Stream :: * -> *
+foreign import data Stream :: Type -> Type
 
 
 -- TODO move `f` to the end, so that newtype deriving works ?

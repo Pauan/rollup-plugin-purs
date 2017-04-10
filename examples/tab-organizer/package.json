@@ -5,26 +5,26 @@
   "devDependencies": {
     "bower": "^1.8.0",
     "jsmin": "^1.0.1",
-    "pulp": "^10.0.0",
-    "purescript": "0.10.5",
-    "rollup": "^0.41.1",
+    "pulp": "^11.0.0",
+    "purescript": "^0.11.1",
+    "rollup": "^0.41.6",
     "rollup-plugin-purs": "file:../..",
-    "rollup-plugin-sourcemaps": "^0.4.1",
-    "uglify-js": "^2.7.5",
-    "webpack": "^2.2.1"
+    "rollup-plugin-sourcemaps": "^0.4.2",
+    "uglify-js": "^2.8.22",
+    "webpack": "^2.3.3"
   },
   "scripts": {
     "prepublish": "bower install && mkdir -p dist/js",
     "build:rollup": "pulp build -- --source-maps && rollup --config && yarn run uglify:rollup && yarn run jsmin:rollup",
     "build:webpack": "pulp build -- --source-maps && webpack && yarn run uglify:webpack && yarn run jsmin:webpack",
-    "build:psc-bundle": "pulp build --main Main --optimise --to dist/js/psc-bundle.js && yarn run uglify:psc-bundle && yarn run jsmin:psc-bundle",
+    "build:purs-bundle": "pulp build --main Main --optimise --to dist/js/purs-bundle.js && yarn run uglify:purs-bundle && yarn run jsmin:purs-bundle",
     "build:pulp-browserify": "pulp browserify --main Main --optimise --to dist/js/pulp-browserify.js && yarn run uglify:pulp-browserify && yarn run jsmin:pulp-browserify",
     "uglify:rollup": "uglifyjs dist/js/rollup.js --output dist/js/rollup.min.js --screw-ie8 --mangle --compress",
     "jsmin:rollup": "jsmin dist/js/rollup.js > dist/js/rollup.jsmin.js",
     "uglify:webpack": "uglifyjs dist/js/webpack.js --output dist/js/webpack.min.js --screw-ie8 --mangle --compress",
     "jsmin:webpack": "jsmin dist/js/webpack.js > dist/js/webpack.jsmin.js",
-    "uglify:psc-bundle": "uglifyjs dist/js/psc-bundle.js --output dist/js/psc-bundle.min.js --screw-ie8 --mangle --compress",
-    "jsmin:psc-bundle": "jsmin dist/js/psc-bundle.js > dist/js/psc-bundle.jsmin.js",
+    "uglify:purs-bundle": "uglifyjs dist/js/purs-bundle.js --output dist/js/purs-bundle.min.js --screw-ie8 --mangle --compress",
+    "jsmin:purs-bundle": "jsmin dist/js/purs-bundle.js > dist/js/purs-bundle.jsmin.js",
     "uglify:pulp-browserify": "uglifyjs dist/js/pulp-browserify.js --output dist/js/pulp-browserify.min.js --screw-ie8 --mangle --compress",
     "jsmin:pulp-browserify": "jsmin dist/js/pulp-browserify.js > dist/js/pulp-browserify.jsmin.js"
   }

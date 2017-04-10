@@ -4,6 +4,7 @@
 /output/
 /generated-docs/
 /.psc*
+/.purs*
 /.psa*
 /bundle.js
 /bundle.js.map

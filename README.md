@@ -9,9 +9,9 @@ Here are the file sizes for the `examples/tab-organizer` program:
 
 | Bundler            | Unminified | JSMin      | UglifyJS   |
 | ------------------ | ---------: | ---------: | ---------: |
-| rollup-plugin-purs | `118.4 kB` | `75.5 kB`  | `40.1 kB`  |
-| psc-bundle         | `165.3 kB` | `112.2 kB` | `69.2 kB`  |
-| webpack            | `944.9 kB` | `639.2 kB` | `176.8 kB` |
+| rollup-plugin-purs | `112.2 kB` | `70.3 kB`  | `35.7 kB`  |
+| purs bundle        | `157.8 kB` | `107.2 kB` | `65.2 kB`  |
+| webpack            | `977.4 kB` | `654.0 kB` | `178.8 kB` |
 
 
 ## Installation
@@ -100,9 +100,9 @@ These are the optimizations which can be turned on or off:
 
   When there is a variable assignment like `var foo = ...` it will assume that the `...` is pure. When used in combination with `removeDeadCode`, this significantly reduces the file size.
 
-  If `assumePureVars` is `false`, then `rollup-plugin-purs` only removes unused variables if it can prove that the variable is pure. But sometimes it won't remove unused variables, because it's not smart enough to realize that the variable is pure.
+  If `assumePureVars` is `false`, then `rollup-plugin-purs` only removes unused variables if it can prove that the variables are pure. But sometimes it won't remove unused variables, because it's not smart enough to realize that the variables are pure.
 
-  If `assumePureVars` is `true`, then `rollup-plugin-purs` will remove all unused variables, even if it can't prove that the variable is pure.
+  If `assumePureVars` is `true`, then `rollup-plugin-purs` will remove all unused variables, even if it can't prove that the variables are pure.
 
   PureScript variables are always pure, so `assumePureVars` is safe. But if you do weird things with the FFI, or if you use an unsafe PureScript function, or if you import a JavaScript library, then `assumePureVars` might break your program.
 

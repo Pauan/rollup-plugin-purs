@@ -1,12 +1,12 @@
 module Pauan.Transaction (Transaction, TransactionId, runTransaction, runTransactions, onCommit) where
 
 import Prelude
-import Control.Monad.Eff (Eff)
+import Control.Monad.Eff (kind Effect, Eff)
 
 
-foreign import data Transaction :: # ! -> * -> *
+foreign import data Transaction :: # Effect -> Type -> Type
 
-foreign import data TransactionId :: *
+foreign import data TransactionId :: Type
 
 foreign import runTransaction :: forall a eff. Transaction eff a -> Eff eff a
 

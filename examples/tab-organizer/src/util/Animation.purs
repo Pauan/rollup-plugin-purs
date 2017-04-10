@@ -32,7 +32,7 @@ import Control.Monad.Eff.Exception (Error)
 import Pauan.Mutable as Mutable
 
 
-foreign import data Animation :: *
+foreign import data Animation :: Type
 
 
 newtype Interval = Interval Number

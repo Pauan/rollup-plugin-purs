@@ -10,7 +10,7 @@ Building
 
 ```
 yarn run build:rollup
-yarn run build:psc-bundle
+yarn run build:purs-bundle
 yarn run build:webpack
 yarn run build:pulp-browserify
 ```

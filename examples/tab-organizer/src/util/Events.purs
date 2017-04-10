@@ -3,7 +3,7 @@ module Pauan.Events (Events, makeBroadcaster, broadcast, receive, class ToEvents
 import Prelude
 import Control.Monad.Eff (Eff)
 import Pauan.Resource (Resource)
-import Data.Filterable (class Filterable, filterDefault, partitionDefault)
+--import Data.Filterable (class Filterable, filterDefault, partitionDefault)
 import Data.Maybe (Maybe, maybe)
 import Data.Either (Either, either)
 import Data.Function.Uncurried (Fn2, Fn3, runFn2, runFn3)
@@ -14,7 +14,7 @@ class ToEvents f a | f -> a where
   events :: f -> Events a
 
 
-foreign import data Events :: * -> *
+foreign import data Events :: Type -> Type
 
 foreign import receiveImpl :: forall a eff. (a -> Eff eff Unit) -> Events a -> Eff eff Resource
 
@@ -45,15 +45,15 @@ foreign import partitionMapImpl :: forall a b l r eff.
      Events a ->
      { left :: Events l, right :: Events r })
 
-instance filterableEvents :: Filterable Events where
+{-instance filterableEvents :: Filterable Events where
   -- TODO implement these faster ?
   filter a = filterDefault a
   partition a = partitionDefault a
   filterMap = runFn2 filterMapImpl (pure unit) maybe
-  partitionMap = runFn3 partitionMapImpl { left: _, right: _ } (const (pure unit)) either
+  partitionMap = runFn3 partitionMapImpl { left: _, right: _ } (const (pure unit)) either-}
 
 
-foreign import data Broadcaster :: * -> *
+foreign import data Broadcaster :: Type -> Type
 
 foreign import makeBroadcaster :: forall a eff. Eff eff (Broadcaster a)
 

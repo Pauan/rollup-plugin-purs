@@ -1,7 +1,7 @@
 "use strict"
 
 /*
- * Webpack 2 loader that can take CommonJS output by psc and convert
+ * Webpack 2 loader that can take CommonJS output by `purs compile` and convert
  * it into tree shakable ES6 modules. No transpiling required.
  */
 var $purs = require("rollup-plugin-purs");

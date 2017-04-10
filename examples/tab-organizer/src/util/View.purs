@@ -10,7 +10,7 @@ import Pauan.Stream (class ToStream, make, stream)
 import Pauan.StreamArray.Class (class ToStreamArray, StreamArray(..), ArrayDelta(..))
 
 
-foreign import data View :: * -> *
+foreign import data View :: Type -> Type
 
 foreign import currentValue :: forall a eff. View a -> Transaction eff a
 

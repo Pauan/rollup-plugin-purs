@@ -223,7 +223,7 @@ draggable state group tab = trait
             then do
               -- TODO make this faster ?
               tabs <- group.tabs >> MutableArray.get
-              tabs >> filterM \x -> (view x.selected && view x.matchedSearch) >> currentValue
+              tabs >> filterA \x -> (view x.selected && view x.matchedSearch) >> currentValue
             else [tab] >> pure
 
           let len = length selected
