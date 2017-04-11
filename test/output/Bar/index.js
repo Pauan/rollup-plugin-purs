@@ -27,6 +27,11 @@ exports.duplicate =
     : duplicatePolyfill);
 
 
+(function () {
+  console.log(exports["var"]);
+})();
+
+
 exports.bar1 = "bar1";
 exports.qux = "bar2";
 exports["uh"] = "bar3";

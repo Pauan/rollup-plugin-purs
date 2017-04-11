@@ -7,9 +7,11 @@ var foo = require("../Foo");
 var corge = require("../Corge");
 require("../Typeclass");
 
+var testing__ = {};
+
 function main() {
   console.log(corge.foo, corge.bar, corge.default);
-  console.log(foo.null);
+  console.log(foo.null, foo.var, testing__.var);
   console.log("MAIN", foo.main(), foo.curried(1), foo.curried(1)(2), foo.curried(1)(2)(3), foo.curried(1)(2)(3)(4));
 }
 

@@ -4,9 +4,31 @@ var $babel = require("babel-core");
 var $util = require("./util");
 
 
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar#Reserved_keywords_as_of_ECMAScript_2015
+// TODO Remove this after https://github.com/rollup/rollup/issues/1321 gets fixed
+var isReservedWord = /^(?:break|case|catch|class|const|debugger|default|delete|do|else|export|extends|finally|for|function|if|import|in|instanceof|new|return|super|switch|this|throw|try|typeof|var|void|while|with|yield|enum|implements|interface|let|package|private|protected|public|static|await)$/;
+
+
 // TODO handle unicode
 function isValidIdentifier(x) {
   return /^[$_a-zA-Z'][$_a-zA-Z0-9']*$/.test(x);
+}
+
+
+// TODO Remove this after https://github.com/rollup/rollup/issues/1321 gets fixed
+function replaceReservedWord(x) {
+  if (isReservedWord.test(x.name)) {
+    return {
+      type: "Identifier",
+      name: "__reserved_" + x.name,
+      start: x.start,
+      end: x.end,
+      loc: x.loc
+    };
+
+  } else {
+    return x;
+  }
 }
 
 
@@ -78,7 +100,7 @@ function exportTempVar(state, body, path, identifier, expression, loc) {
     specifiers: [{
       type: "ExportSpecifier",
       local: temp,
-      exported: identifier,
+      exported: replaceReservedWord(identifier),
       // TODO mergeLoc(temp.loc, identifier.loc) ?
       loc: loc
     }],
@@ -102,7 +124,7 @@ function exportVar(state, body, path, identifier, expression, loc) {
       specifiers: [{
         type: "ExportSpecifier",
         local: expression,
-        exported: identifier,
+        exported: replaceReservedWord(identifier),
         loc: mergeLoc(expression.loc, identifier.loc)
       }],
       source: null,
@@ -127,8 +149,8 @@ function exportVar(state, body, path, identifier, expression, loc) {
         declaration: null,
         specifiers: [{
           type: "ExportSpecifier",
-          local: from,
-          exported: identifier,
+          local: replaceReservedWord(from),
+          exported: replaceReservedWord(identifier),
           loc: mergeLoc(from.loc, identifier.loc)
         }],
         source: file,
@@ -192,7 +214,7 @@ function replaceExport(state, path, identifier, loc) {
       specifiers: [{
         type: "ExportSpecifier",
         local: temp,
-        exported: identifier,
+        exported: replaceReservedWord(identifier),
         loc: loc
       }],
       source: null,
@@ -213,7 +235,7 @@ function replaceExport(state, path, identifier, loc) {
       loc: loc
     });
 
-    state.exports[identifier.name] = temp;
+    setExport(state, identifier.name, temp);
     return temp;
   }
 }
@@ -252,6 +274,14 @@ function transformCommonJS(babel) {
                   x.init !== null &&
                   isRequireCall(path, x.init)) {
                 var file = x.init.arguments[0];
+
+                // TODO is this the correct scope ?
+                var binding = path.scope.getBinding(x.id.name);
+
+                console.assert(binding != null);
+
+                // TODO Remove this after https://github.com/rollup/rollup/issues/1321 gets fixed
+                binding.rollup_plugin_purs_is_imported = true;
 
                 state.imports[x.id.name] = file;
 
@@ -440,21 +470,30 @@ function transformCommonJS(babel) {
           node.computed = false;
           node.property = identifier;
 
-          if (isUndefinedIdentifier(path, node.object)) {
-            // TODO handle module.exports.foo ?
-            // exports.foo
-            if (node.object.name === "exports") {
-              path.replaceWith(replaceExport(state, path, identifier));
+          if (node.object.type === "Identifier") {
+            // TODO is this the correct scope ?
+            var binding = path.scope.getBinding(node.object.name);
 
-            // module.exports
-            } else if (node.object.name === "module" &&
-                       identifier.name === "exports") {
-              path.replaceWith(replaceExport(state, path, {
-                type: "Identifier",
-                name: "default",
-                // TODO is this correct ?
-                loc: node.loc
-              }));
+            if (binding == null) {
+              // TODO handle module.exports.foo ?
+              // exports.foo
+              if (node.object.name === "exports") {
+                path.replaceWith(replaceExport(state, path, identifier));
+
+              // module.exports
+              } else if (node.object.name === "module" &&
+                         identifier.name === "exports") {
+                path.replaceWith(replaceExport(state, path, {
+                  type: "Identifier",
+                  name: "default",
+                  // TODO is this correct ?
+                  loc: node.loc
+                }));
+              }
+
+            // TODO Remove this after https://github.com/rollup/rollup/issues/1321 gets fixed
+            } else if (binding.rollup_plugin_purs_is_imported) {
+              node.property = replaceReservedWord(node.property);
             }
           }
         }

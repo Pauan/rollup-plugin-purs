@@ -125,6 +125,8 @@ function main() {
   console.log("HI!", $bar.main(), exports.foo1, exports.foo2, exports["if"], exports.bar, exports.default, module.exports, module["exports"]);
 }
 
+console.log($bar["var"]);
+
 //exports.foo20 = "bar";
 
 module.exports = {
@@ -133,7 +135,7 @@ module.exports = {
   bar: $bar.bar1,
   qux: $bar.qux,
   "if": foo_var1,
-  //"var": $bar["var"],
+  "var": $bar["var"],
   "foo_foo'": $bar["foo'"],
   foo_var10: foo_var1,
   "const": foo_var1,
