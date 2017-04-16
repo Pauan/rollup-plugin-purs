@@ -70,103 +70,131 @@ function mergeLoc(x, y) {
 
 
 function exportTempVar(state, body, path, identifier, expression, loc) {
-  // TODO guarantee that collisions cannot occur ?
-  var temp = path.scope.generateUidIdentifier(identifier.name);
-
-  // TODO is this correct ?
-  temp.loc = identifier.loc;
-
-  // TODO adjust the loc ?
-  setExport(state, identifier.name, temp);
-
-  // TODO maybe use const ?
-  // var temp = expression;
-  body.push({
-    type: "VariableDeclaration",
-    kind: "var",
-    declarations: [{
-      type: "VariableDeclarator",
-      id: temp,
-      init: expression,
-      // TODO mergeLoc(temp.loc, expression.loc) ?
+  // TODO is this correct in every situation ?
+  if ($util.hasKey(state.exports, identifier.name)) {
+    // exported = expression;
+    body.push($util.expressionStatement({
+      type: "AssignmentExpression",
+      operator: "=",
+      left: state.exports[identifier.name],
+      right: expression,
       loc: loc
-    }],
-    loc: loc
-  });
+    }));
 
-  // export { temp as identifier };
-  body.push({
-    type: "ExportNamedDeclaration",
-    declaration: null,
-    specifiers: [{
-      type: "ExportSpecifier",
-      local: temp,
-      exported: replaceReservedWord(identifier),
-      // TODO mergeLoc(temp.loc, identifier.loc) ?
-      loc: loc
-    }],
-    source: null,
-    loc: loc
-  });
-}
+  } else {
+    // TODO guarantee that collisions cannot occur ?
+    var temp = path.scope.generateUidIdentifier(identifier.name);
 
+    // TODO is this correct ?
+    temp.loc = identifier.loc;
 
-function exportVar(state, body, path, identifier, expression, loc) {
-  if (expression.type === "Identifier" &&
-      // TODO is this check correct ?
-      !isUndefined(path, expression.name)) {
     // TODO adjust the loc ?
-    setExport(state, identifier.name, expression);
+    setExport(state, identifier.name, temp);
 
-    // export { expression as identifier };
+    // TODO maybe use const ?
+    // var temp = expression;
+    body.push({
+      type: "VariableDeclaration",
+      kind: "var",
+      declarations: [{
+        type: "VariableDeclarator",
+        id: temp,
+        init: expression,
+        // TODO mergeLoc(temp.loc, expression.loc) ?
+        loc: loc
+      }],
+      loc: loc
+    });
+
+    // export { temp as identifier };
     body.push({
       type: "ExportNamedDeclaration",
       declaration: null,
       specifiers: [{
         type: "ExportSpecifier",
-        local: expression,
+        local: temp,
         exported: replaceReservedWord(identifier),
-        loc: mergeLoc(expression.loc, identifier.loc)
+        // TODO mergeLoc(temp.loc, identifier.loc) ?
+        loc: loc
       }],
       source: null,
       loc: loc
     });
-    return;
+  }
+}
 
-  // TODO does this need to check that the expression identifier is defined ?
-  } else if (expression.type === "MemberExpression" &&
-             expression.object.type === "Identifier" &&
-             $util.hasKey(state.imports, expression.object.name)) {
-    var file = state.imports[expression.object.name];
-    var from = toIdentifier(state, expression.property, expression.computed);
 
-    if (from !== null) {
+function exportVar(state, body, path, identifier, expression, loc) {
+  // TODO is this correct in every situation ?
+  if ($util.hasKey(state.exports, identifier.name)) {
+    // exported = expression;
+    body.push($util.expressionStatement({
+      type: "AssignmentExpression",
+      operator: "=",
+      left: state.exports[identifier.name],
+      right: expression,
+      loc: loc
+    }));
+
+  } else {
+    if (expression.type === "Identifier" &&
+        // TODO is this check correct ?
+        !isUndefined(path, expression.name)) {
       // TODO adjust the loc ?
+      // TODO what about when it's reassigned ?
       setExport(state, identifier.name, expression);
 
-      // export { from as identifier } from file;
+      // export { expression as identifier };
       body.push({
         type: "ExportNamedDeclaration",
         declaration: null,
         specifiers: [{
           type: "ExportSpecifier",
-          local: replaceReservedWord(from),
+          local: expression,
           exported: replaceReservedWord(identifier),
-          loc: mergeLoc(from.loc, identifier.loc)
+          loc: mergeLoc(expression.loc, identifier.loc)
         }],
-        source: file,
+        source: null,
         loc: loc
       });
       return;
+
+    // TODO does this need to check that the expression identifier is defined ?
+    } else if (expression.type === "MemberExpression" &&
+               expression.object.type === "Identifier" &&
+               $util.hasKey(state.imports, expression.object.name)) {
+      var file = state.imports[expression.object.name];
+      var from = toIdentifier(state, expression.property, expression.computed);
+
+      if (from !== null) {
+        // TODO adjust the loc ?
+        // TODO what about when it's reassigned ?
+        setExport(state, identifier.name, expression);
+
+        // export { from as identifier } from file;
+        body.push({
+          type: "ExportNamedDeclaration",
+          declaration: null,
+          specifiers: [{
+            type: "ExportSpecifier",
+            local: replaceReservedWord(from),
+            exported: replaceReservedWord(identifier),
+            loc: mergeLoc(from.loc, identifier.loc)
+          }],
+          source: file,
+          loc: loc
+        });
+        return;
+      }
     }
-  }
 
-  if (!isUndefined(path, identifier.name)) {
-    // TODO is this the correct loc ?
-    state.opts.warn("Variable " + identifier.name + " already exists", identifier.start);
-  }
+    if (!isUndefined(path, identifier.name)) {
+      // TODO is this the correct loc ?
+      state.opts.warn("Variable " + identifier.name + " already exists", identifier.start);
+    }
 
-  exportTempVar(state, body, path, identifier, expression, loc);
+    exportTempVar(state, body, path, identifier, expression, loc);
+  }
 }
 
 
@@ -351,13 +379,15 @@ function transformCommonJS(babel) {
                 state.moduleOverwritten = true;
 
                 for (var key in state.exports) {
-                  if ($util.hasKey(state.exports, key)) {
+                  // TODO is this correct ?
+                  if (key !== "default" && $util.hasKey(state.exports, key)) {
                     // TODO loc
                     state.opts.warn("Export " + key + " is ignored");
                   }
                 }
 
                 // module.exports = require("foo");
+                // TODO what if module.exports is already set ?
                 if (isRequireCall(path, x.expression.right)) {
                   var file = x.expression.right.arguments[0];
 
@@ -427,7 +457,8 @@ function transformCommonJS(babel) {
 
             // TODO code duplication
             for (var key in state.exports) {
-              if ($util.hasKey(state.exports, key)) {
+              // TODO is this correct ?
+              if (key !== "default" && $util.hasKey(state.exports, key)) {
                 // TODO loc
                 state.opts.warn("Export " + key + " is ignored");
               }

@@ -42,6 +42,16 @@ exports.hasOwnProperty = "hi!";
 exports.null = 10;
 //exports.main = main;
 
+exports.qux = "bar3";
+
+(function () {
+  exports.innerDuplicate = 0;
+
+  exports.innerDuplicate = 1;
+
+  console.log(exports.innerDuplicate);
+})();
+
 exports.recursive1 = function () {
   exports.recursive2();
 };

@@ -129,6 +129,8 @@ console.log($bar["var"]);
 
 //exports.foo20 = "bar";
 
+module.exports = console.log("MODULE.EXPORTS");
+
 module.exports = {
   foo1: "foo1",
   //require: require,
