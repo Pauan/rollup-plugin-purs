@@ -35,9 +35,10 @@ function replaceReservedWord(x) {
 function toIdentifier(state, x, computed) {
   if (x.type === "StringLiteral") {
     if (isValidIdentifier(x.value)) {
-      if (/'/.test(x.value)) {
+      // TODO reenable this later
+      /*if (/'/.test(x.value)) {
         state.opts.warn("Primes are not allowed in JavaScript identifiers: " + x.value, x.start);
-      }
+      }*/
 
       return {
         type: "Identifier",
