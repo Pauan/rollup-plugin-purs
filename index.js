@@ -14,6 +14,7 @@ var $removeSequence = require("./src/remove-sequence");
 var $removeIIFE = require("./src/remove-iife");
 var $typeclass = require("./src/typeclass");
 var $deadCode = require("./src/dead-code");
+var $inlineAccessors = require("./src/inline-accessors");
 
 
 function pursPath(options, path) {
@@ -97,6 +98,12 @@ module.exports = function (options) {
           rollup.entry !== entryPath) {
         entry = rollup.entry;
         rollup.entry = entryPath;
+      }
+      if (options.runMain &&
+          rollup.input != null &&
+          rollup.input !== entryPath) {
+        entry = rollup.input;
+        rollup.input = entryPath;
       }
     },
 
@@ -273,6 +280,8 @@ module.exports = function (options) {
       // TODO use babel-preset-babili ?
       // TODO use "minify-dead-code-elimination" ?
       plugins.push("minify-constant-folding");
+
+      plugins.push([$inlineAccessors, {debug: options.debug}]);
 
       if (options.optimizations.removeDeadCode) {
         // TODO is this the correct `code` to use ?
