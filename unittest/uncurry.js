@@ -1,9 +1,6 @@
 const assert = require("assert");
 const $babel = require("babel-core");
 const uncurry = require("../src/uncurry.js");
-const fs = require("fs");
-const child_process = require("child_process");
-const util = require("util");
 
 const testCases = [{
   codeIn: [
