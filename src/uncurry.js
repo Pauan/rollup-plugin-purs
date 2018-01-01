@@ -206,7 +206,6 @@ module.exports = function (babel) {
                 var created = false;
 
                 for (var i = uncurried.params.length - 1; i >= args.length; --i) {
-                  // TODO make a copy of the params ?
                   var params = uncurried.params[i].map(function(node){
                     if (node.type === "Identifier"){
                       var uid = path.scope.generateUidIdentifier(node.name);
