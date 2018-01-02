@@ -48,7 +48,7 @@ function makeUncurried(binding, path, id, top) {
           type: "FunctionExpression",
           id: null,
           params: flattened,
-          body: x.body,
+          body: $util.cloneDeep(x.body),
           loc: top.loc
         },
         unique: true
