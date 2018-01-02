@@ -315,6 +315,7 @@ var inlineVisitor = {
 
         if (state.arguments[index] !== null) {
           path.replaceWith(state.arguments[index]);
+          path.skip();
         }
       }
     }
