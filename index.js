@@ -98,6 +98,12 @@ module.exports = function (options) {
         entry = rollup.entry;
         rollup.entry = entryPath;
       }
+      if (options.runMain &&
+          rollup.input != null &&
+          rollup.input !== entryPath) {
+        entry = rollup.input;
+        rollup.input = entryPath;
+      }
     },
 
     resolveId: function (filePath, importer) {
