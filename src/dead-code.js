@@ -311,6 +311,8 @@ var visitor = {
                 if (pure) {
                   if (path.parent.type === "BlockStatement" &&
                       path.parentPath.parent.type === "FunctionExpression" &&
+                      path.parentPath.parent.id &&
+                      path.parentPath.parent.id.name &&
                       path.parentPath.parent.id.name.match("__do")){
                     ++state.deadCodeInDoBlockNotRemoved;
                     path.replaceWith($util.expressionStatement(node.init));
