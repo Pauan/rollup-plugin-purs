@@ -309,8 +309,14 @@ var visitor = {
                 ++state.dead;
 
                 if (pure) {
-                  path.remove();
-
+                  if (path.parent.type === "BlockStatement" &&
+                      path.parentPath.parent.type === "FunctionExpression" &&
+                      path.parentPath.parent.id.name.match("__do")){
+                    ++state.deadCodeInDoBlockNotRemoved;
+                    path.replaceWith($util.expressionStatement(node.init));
+                  } else {
+                    path.remove();
+                  }
                 } else {
                   path.replaceWith($util.expressionStatement(node.init));
                 }
@@ -391,6 +397,7 @@ module.exports = function (babel) {
       this.impure = 0;
       this.ignored = 0;
       this.deadExpressions = 0;
+      this.deadCodeInDoBlockNotRemoved = 0;
       this.after = [];
     },
     post: function () {
@@ -404,6 +411,7 @@ module.exports = function (babel) {
         console.info(" * Impure variables: " + this.impure);
         console.info(" * Ignored variables: " + this.ignored);
         console.info(" * Unused pure expressions: " + this.deadExpressions);
+        console.info(" * Dead code in do block not removed: " + this.deadCodeInDoBlockNotRemoved);
       }
     },
     visitor: visitor
