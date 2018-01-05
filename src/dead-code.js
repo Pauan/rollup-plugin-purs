@@ -301,6 +301,12 @@ var visitor = {
             // TODO is this scope correct ?
             var pure = state.opts.assumePureVars || rightPure;
 
+            var inDoBlock = path.parent.type === "BlockStatement" &&
+                            path.parentPath.parent.type === "FunctionExpression" &&
+                            path.parentPath.parent.id &&
+                            path.parentPath.parent.id.name &&
+                            path.parentPath.parent.id.name.match("__do");
+
             state.after.push(function () {
               if (binding.rollup_plugin_used) {
                 ++state.live;
@@ -309,11 +315,7 @@ var visitor = {
                 ++state.dead;
 
                 if (pure) {
-                  if (path.parent.type === "BlockStatement" &&
-                      path.parentPath.parent.type === "FunctionExpression" &&
-                      path.parentPath.parent.id &&
-                      path.parentPath.parent.id.name &&
-                      path.parentPath.parent.id.name.match("__do")){
+                  if (inDoBlock){
                     ++state.deadCodeInDoBlockNotRemoved;
                     path.replaceWith($util.expressionStatement(node.init));
                   } else {
@@ -325,7 +327,7 @@ var visitor = {
               }
             });
 
-            if (!binding.rollup_plugin_used && pure) {
+            if (!binding.rollup_plugin_used && (pure && !inDoBlock)) {
               if (binding.rollup_plugin_onUse == null) {
                 binding.rollup_plugin_onUse = [];
               }
