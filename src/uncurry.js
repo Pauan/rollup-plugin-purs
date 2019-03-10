@@ -48,7 +48,7 @@ function makeUncurried(binding, path, id, top) {
           type: "FunctionExpression",
           id: null,
           params: flattened,
-          body: x.body,
+          body: $util.cloneDeep(x.body),
           loc: top.loc
         },
         unique: true
@@ -206,14 +206,22 @@ module.exports = function (babel) {
                 var created = false;
 
                 for (var i = uncurried.params.length - 1; i >= args.length; --i) {
-                  // TODO make a copy of the params ?
-                  pushAll(path, statements, flattened, uncurried.params[i]);
+                  var params = uncurried.params[i].map(function(node){
+                    if (node.type === "Identifier"){
+                      var uid = path.scope.generateUidIdentifier(node.name);
+                      return Object.assign({}, node, {name: uid.name});
+                    } else {
+                      return node;
+                    }
+                  });
+
+                  pushAll(path, statements, flattened, params);
 
                   body = {
                     type: "FunctionExpression",
                     id: null,
                     // TODO make a copy of the params ?
-                    params: uncurried.params[i],
+                    params: params,
                     body: {
                       type: "BlockStatement",
                       body: [{

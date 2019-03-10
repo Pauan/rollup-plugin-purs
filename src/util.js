@@ -130,6 +130,30 @@ exports.print = function (node) {
   }).code;
 };
 
+// Stolen from babel-types
+exports.cloneDeep = function cloneDeep(node) {
+  if (!node) return node;
+  const newNode = {};
+
+  Object.keys(node).forEach(key => {
+    if (key[0] === "_") return;
+
+    let val = node[key];
+
+    if (val) {
+      if (val.type) {
+        val = cloneDeep(val);
+      } else if (Array.isArray(val)) {
+        val = val.map(cloneDeep);
+      }
+    }
+
+    newNode[key] = val;
+  });
+
+  return newNode;
+};
+
 
 // https://github.com/babel/babylon/blob/master/ast/spec.md
 // TODO Import ?
