@@ -301,6 +301,12 @@ var visitor = {
             // TODO is this scope correct ?
             var pure = state.opts.assumePureVars || rightPure;
 
+            var inDoBlock = path.parent.type === "BlockStatement" &&
+                            path.parentPath.parent.type === "FunctionExpression" &&
+                            path.parentPath.parent.id &&
+                            path.parentPath.parent.id.name &&
+                            path.parentPath.parent.id.name.match("__do");
+
             state.after.push(function () {
               if (binding.rollup_plugin_used) {
                 ++state.live;
@@ -309,15 +315,19 @@ var visitor = {
                 ++state.dead;
 
                 if (pure) {
-                  path.remove();
-
+                  if (inDoBlock){
+                    ++state.deadCodeInDoBlockNotRemoved;
+                    path.replaceWith($util.expressionStatement(node.init));
+                  } else {
+                    path.remove();
+                  }
                 } else {
                   path.replaceWith($util.expressionStatement(node.init));
                 }
               }
             });
 
-            if (!binding.rollup_plugin_used && pure) {
+            if (!binding.rollup_plugin_used && (pure && !inDoBlock)) {
               if (binding.rollup_plugin_onUse == null) {
                 binding.rollup_plugin_onUse = [];
               }
@@ -391,6 +401,7 @@ module.exports = function (babel) {
       this.impure = 0;
       this.ignored = 0;
       this.deadExpressions = 0;
+      this.deadCodeInDoBlockNotRemoved = 0;
       this.after = [];
     },
     post: function () {
@@ -404,6 +415,7 @@ module.exports = function (babel) {
         console.info(" * Impure variables: " + this.impure);
         console.info(" * Ignored variables: " + this.ignored);
         console.info(" * Unused pure expressions: " + this.deadExpressions);
+        console.info(" * Dead code in do block not removed: " + this.deadCodeInDoBlockNotRemoved);
       }
     },
     visitor: visitor
