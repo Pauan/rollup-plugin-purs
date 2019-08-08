@@ -1,0 +1,29 @@
+[package]
+name = "rollup-plugin-purs"
+description = "Bundle PureScript modules with Rollup"
+version = "1.0.38"
+authors = ["Pauan <pcxunlimited@gmail.com>"]
+categories = ["wasm"]
+readme = "README.md"
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+lto = true
+
+[dependencies]
+wasm-bindgen = "0.2.45"
+js-sys = "0.3.25"
+regex = "1.2.1"
+lazy_static = "1.3.0"
+nom = "5.0.0"
+nom_locate = "0.4.0"
+
+[dependencies.web-sys]
+version = "0.3.25"
+features = ["console"]
+
+[target."cfg(debug_assertions)".dependencies]
+console_error_panic_hook = "0.1.5"

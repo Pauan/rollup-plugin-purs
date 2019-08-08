@@ -2,3 +2,7 @@
 /test/bundle.js
 /test/bundle.js.map
 /test/bundle.min.js
+/dist
+/target
+/pkg
+/wasm-pack.log

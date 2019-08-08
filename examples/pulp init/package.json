@@ -4,13 +4,13 @@
   "version": "1.0.0",
   "devDependencies": {
     "bower": "^1.8.0",
-    "pulp": "^11.0.0",
-    "purescript": "^0.11.1",
-    "rollup": "^0.41.6",
+    "pulp": "^13.0.0",
+    "purescript": "^0.13.2",
+    "rollup": "^1.19.4",
     "rollup-plugin-purs": "file:../.."
   },
   "scripts": {
     "postinstall": "bower install",
-    "build": "pulp build -- --source-maps && rollup --config"
+    "build": "pulp build --source-maps"
   }
 }

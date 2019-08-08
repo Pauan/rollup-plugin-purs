@@ -1,10 +1,12 @@
-var purs = require("../index.js");
+var purs = require("../dist/index.js");
 
 export default {
-  entry: "Main.purs",
-  dest: "bundle.js",
-  format: "iife",
-  sourceMap: true,
+  input: "Main.purs",
+  output: {
+    file: "bundle.js",
+    format: "iife",
+    sourcemap: true
+  },
   plugins: [
     purs({
       debug: true,

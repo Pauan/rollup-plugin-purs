@@ -1,19 +1,6 @@
-"use strict";
-
-var $babel = require("babel-core");
-var $utils = require("rollup-pluginutils");
-var $path = require("path");
-var $fs = require("fs");
-
-var $convert = require("./src/convert");
-var $uncurry = require("./src/uncurry");
-var $inline = require("./src/inline");
-var $rename = require("./src/rename");
-var $propagate = require("./src/propagate");
-var $removeSequence = require("./src/remove-sequence");
-var $removeIIFE = require("./src/remove-iife");
-var $typeclass = require("./src/typeclass");
-var $deadCode = require("./src/dead-code");
+import * as $utils from "rollup-pluginutils";
+import * as $path from "path";
+import * as $fs from "fs";
 
 
 function pursPath(options, path) {
@@ -25,7 +12,7 @@ function pursPath(options, path) {
 var entryPath = "\0rollup-plugin-purs:entry-point";
 
 
-module.exports = function (options) {
+export default function (options) {
   if (options == null) {
     options = {};
   }
@@ -90,7 +77,7 @@ module.exports = function (options) {
     options: function (rollup) {
       // We use a better treeshaking algorithm than Rollup, so we disable Rollup's treeshaking for faster speed
       // TODO set this to false later
-      rollup.treeshake = true;
+      //rollup.treeshake = true;
 
       if (options.runMain &&
           rollup.entry != null &&
@@ -181,10 +168,11 @@ module.exports = function (options) {
       // TODO test if this optimization actually makes it faster or not
       if (!/exports|module|require/.test(code)) return;
 
-      return $convert.call(this, code, filePath);
+      return import("../pkg/index").then(($rust) => $rust.convert(this, code, filePath));
     },
 
-    transformBundle: function (code) {
+    renderChunk: function (code) {
+      return import("../pkg/index").then(($rust) => $rust.optimize(this, code, options));
       /*return $babel.transform("foo", {
         babelrc: false,
         ast: false,
