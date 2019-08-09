@@ -28,6 +28,55 @@ fn one_of(input: char, pat: &str) -> bool {
     false
 }
 
+fn many0<A, F>(mut f: F) -> ParseResult<Vec<A>> where F: FnMut() -> ParseResult<Option<A>> {
+    let mut output = vec![];
+
+    loop {
+        return match f() {
+            Value(Some(value)) => {
+                output.push(value);
+                continue;
+            },
+            Value(None) => Value(output),
+            Error(e) => Error(e),
+            Failed => Failed,
+        }
+    }
+}
+
+fn each0<F>(mut f: F) -> ParseResult<()> where F: FnMut() -> ParseResult<Option<()>> {
+    loop {
+        return match f() {
+            Value(Some(_)) => continue,
+            Value(None) => Value(()),
+            Error(e) => Error(e),
+            Failed => Failed,
+        }
+    }
+}
+
+fn each1<F>(mut f: F) -> ParseResult<()> where F: FnMut() -> ParseResult<Option<()>> {
+    let mut matched = false;
+
+    loop {
+        return match f() {
+            Value(Some(_)) => {
+                matched = true;
+                continue;
+            },
+            Value(None) => {
+                if matched {
+                    Value(())
+                } else {
+                    Failed
+                }
+            },
+            Error(e) => Error(e),
+            Failed => Failed,
+        }
+    }
+}
+
 macro_rules! backtrack {
     ($this:expr, $e:expr) => {{
         let old_stream = $this.set_backtrack();
@@ -54,6 +103,18 @@ macro_rules! alt {
     };
 }
 
+macro_rules! alt_opt {
+    ($this:expr => $($e:expr,)+) => {
+        alt!($this =>
+            $(seq! {
+                let value = $e;
+                Value(Some(value))
+            },)+
+            Value(None),
+        )
+    };
+}
+
 macro_rules! seq {
     ($final:expr) => {
         $final
@@ -67,7 +128,7 @@ macro_rules! seq {
     };
     ($e:expr; $($rest:tt)*) => {
         match $e {
-            ParseResult::Value(_) => seq!($($rest)*),
+            ParseResult::Value(()) => seq!($($rest)*),
             ParseResult::Error(e) => ParseResult::Error(e),
             ParseResult::Failed => ParseResult::Failed,
         }
@@ -78,10 +139,8 @@ macro_rules! with_str {
     ($this:expr, $e:expr) => {{
         let start = $this.stream.offset();
 
-        let e: ParseResult<()> = $e;
-
         seq! {
-            e;
+            $e;
             ParseResult::Value(&$this.input[start..$this.stream.offset()])
         }
     }};
@@ -173,12 +232,12 @@ impl<'a> Iterator for TextStream<'a> {
 
 pub struct Parser<'a, 'b> {
     input: &'a str,
-    filename: &'b str,
+    filename: Option<&'b str>,
     stream: TextStream<'a>,
 }
 
 impl<'a, 'b> Parser<'a, 'b> {
-    pub fn new(input: &'a str, filename: &'b str) -> Self {
+    pub fn new(input: &'a str, filename: Option<&'b str>) -> Self {
         Self {
             stream: TextStream::new(input),
             input,
@@ -222,9 +281,9 @@ impl<'a, 'b> Parser<'a, 'b> {
             }
         }
 
-        format!("{} [{} {}:{}]\n{}{}\n{}^",
+        format!("{} [{}{}:{}]\n{}{}\n{}^",
             message,
-            self.filename,
+            self.filename.map(|x| format!("{} ", x)).unwrap_or_else(|| "".to_string()),
             position.line + 1,
             position.column + 1,
             &left[left_index..],
@@ -247,7 +306,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn next_while<F>(&mut self, mut f: F) -> ParseResult<()> where F: FnMut(char) -> bool {
+    fn consume_while<F>(&mut self, mut f: F) -> ParseResult<()> where F: FnMut(char) -> bool {
         loop {
             return match self.next_if(|x| f(x)) {
                 Value(_) => continue,
@@ -257,44 +316,42 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn match_str(&mut self, pat: &str) -> ParseResult<&'a str> {
+    fn consume_if<F>(&mut self, f: F) -> ParseResult<()> where F: FnOnce(char) -> bool {
+        seq! {
+            let _ = self.next_if(f);
+            Value(())
+        }
+    }
+
+    fn consume_str(&mut self, pat: &str) -> ParseResult<()> {
         let mut chars = pat.chars();
 
-        with_str!(self, {
-            loop {
-                break if let Some(pat) = chars.next() {
-                    seq! {
-                        self.next_if(|c| c == pat);
-                        continue
-                    }
-
-                } else {
-                    Value(())
+        loop {
+            break if let Some(pat) = chars.next() {
+                seq! {
+                    self.consume_if(|c| c == pat);
+                    continue
                 }
-            }
-        })
+
+            } else {
+                Value(())
+            };
+        }
     }
 
 
     fn parse_newline(&mut self) -> ParseResult<()> {
-        seq! {
-            self.next_if(|c| c == '\n');
-            Value(())
-        }
+        self.consume_if(|c| c == '\n')
     }
 
     fn parse_whitespace(&mut self) -> ParseResult<()> {
-        seq! {
-            self.next_if(|c| one_of(c, WHITESPACE));
-            Value(())
-        }
+        self.consume_if(|c| one_of(c, WHITESPACE))
     }
 
     fn parse_line_comment(&mut self) -> ParseResult<()> {
         seq! {
-            self.match_str("//");
-            self.next_while(|c| c != '\n');
-            Value(())
+            self.consume_str("//");
+            self.consume_while(|c| c != '\n')
         }
     }
 
@@ -302,7 +359,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         let start = self.stream.position();
 
         seq! {
-            self.match_str("/*");
+            self.consume_str("/*");
 
             loop {
                 break match self.stream.next() {
@@ -319,20 +376,16 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn consume_whitespace(&mut self) -> ParseResult<()> {
-        loop {
-            let matches = alt!(self =>
+        each0(|| alt_opt!(self =>
+            // If there are multiple whitespace characters it will consume
+            // all of them before checking the rest of the alt branches
+            each1(|| alt_opt!(self =>
                 self.parse_newline(),
                 self.parse_whitespace(),
-                self.parse_line_comment(),
-                self.parse_block_comment(),
-            );
-
-            return match matches {
-                Value(_) => continue,
-                Failed => Value(()),
-                v => v,
-            };
-        }
+            )),
+            self.parse_line_comment(),
+            self.parse_block_comment(),
+        ))
     }
 
     fn consume_semicolon(&mut self) -> ParseResult<()> {
@@ -372,12 +425,10 @@ impl<'a, 'b> Parser<'a, 'b> {
         let start = self.stream.position();
 
         seq! {
-            self.next_if(|c| c == delimiter);
+            let raw_value = with_str!(self, seq! {
+                self.consume_if(|c| c == delimiter);
 
-            let raw_value = with_str!(self, {
                 loop {
-                    let backup = self.set_backtrack();
-
                     break match self.stream.next() {
                         // TODO better handling for escapes
                         Some('\\') => {
@@ -386,8 +437,6 @@ impl<'a, 'b> Parser<'a, 'b> {
                         },
                         Some(c) => {
                             if c == delimiter {
-                                // TODO figure out a way to avoid restoring the backup
-                                self.restore_backtrack(backup);
                                 Value(())
 
                             } else {
@@ -401,8 +450,6 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }
             });
 
-            self.next_if(|c| c == delimiter);
-
             Value(StringLiteral { raw_value })
         }
     }
@@ -414,17 +461,17 @@ impl<'a, 'b> Parser<'a, 'b> {
         )
     }
 
-    fn parse_from_clause(&mut self) -> ParseResult<Span<StringLiteral<'a>>> {
+    fn parse_from_clause(&mut self) -> ParseResult<StringLiteral<'a>> {
         seq! {
-            self.match_str("from");
+            self.consume_str("from");
             self.consume_whitespace();
-            with_span!(self, self.parse_string())
+            self.parse_string()
         }
     }
 
     fn parse_import_declaration(&mut self) -> ParseResult<ModuleStatement<'a>> {
         seq! {
-            self.match_str("import");
+            self.consume_str("import");
             self.consume_whitespace();
             let value = alt!(self =>
                 seq! {
@@ -435,13 +482,107 @@ impl<'a, 'b> Parser<'a, 'b> {
                 seq! {
                     let specifiers = self.parse_import_clause();
                     self.consume_whitespace();
-                    let filename = self.parse_from_clause();
+                    let filename = with_span!(self, self.parse_from_clause());
                     Value(ModuleStatement::Import { specifiers, filename })
                 },
             );
+            // TODO should this be included in the Span ?
             self.consume_semicolon();
             Value(value)
         }
+    }
+
+    fn parse_block_statement(&mut self, has_yield: bool, has_await: bool, has_return: bool) -> ParseResult<Statement<'a>> {
+        seq! {
+            self.consume_if(|c| c == '{');
+
+            let statements = many0(|| seq! {
+                self.consume_whitespace();
+
+                // TODO new alt combinator for this ?
+                alt!(self =>
+                    seq! {
+                        self.consume_if(|c| c == '}');
+                        Value(None)
+                    },
+                    seq! {
+                        let value = with_span!(self, self.parse_statement_list_item(has_yield, has_await, has_return));
+                        Value(Some(value))
+                    },
+                )
+            });
+
+            Value(Statement::Block { statements })
+        }
+    }
+
+    // TODO handle Unicode
+    fn parse_identifier_name(&mut self) -> ParseResult<Identifier<'a>> {
+        seq! {
+            let name = with_str!(self, seq! {
+                self.consume_if(|c| c == '$' || c == '_' || c.is_ascii_alphabetic());
+
+                each0(|| alt_opt!(self =>
+                    self.consume_if(|c| c == '$' || c == '_' || c.is_ascii_alphanumeric()),
+                ))
+            });
+
+            Value(Identifier { name })
+        }
+    }
+
+    fn parse_identifier(&mut self) -> ParseResult<Identifier<'a>> {
+        let start = self.stream.position();
+
+        seq! {
+            let v = self.parse_identifier_name();
+
+            if v.is_reserved_word() {
+                Error(self.format_error(start, "Reserved word"))
+
+            } else {
+                Value(v)
+            }
+        }
+    }
+
+    fn parse_expression(&mut self, has_in: bool, has_yield: bool, has_await: bool) -> ParseResult<Expression<'a>> {
+        alt!(self =>
+            seq! {
+                let v = self.parse_string();
+                Value(Expression::Literal(Literal::String(v)))
+            },
+            seq! {
+                let v = self.parse_identifier();
+                Value(Expression::Identifier(v))
+            },
+        )
+    }
+
+    fn parse_statement(&mut self, has_yield: bool, has_await: bool, has_return: bool) -> ParseResult<Statement<'a>> {
+        seq! {
+            let value = alt!(self =>
+                self.parse_block_statement(has_yield, has_await, has_return),
+                // This must go at the end
+                seq! {
+                    let expression = with_span!(self, self.parse_expression(true, has_yield, has_await));
+                    self.consume_semicolon();
+                    Value(Statement::Expression(expression))
+                },
+            );
+            Value(value)
+        }
+    }
+
+    fn parse_declaration(&mut self, has_yield: bool, has_await: bool) -> ParseResult<Statement<'a>> {
+        Failed
+    }
+
+    fn parse_statement_list_item(&mut self, has_yield: bool, has_await: bool, has_return: bool) -> ParseResult<Statement<'a>> {
+        alt!(self =>
+            self.parse_statement(has_yield, has_await, has_return),
+            self.parse_declaration(has_yield, has_await),
+        )
     }
 
     fn parse_end_of_line<A>(&mut self) -> ParseResult<A> {
@@ -455,46 +596,41 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn parse_module_item(&mut self) -> ParseResult<ModuleStatement<'a>> {
-        println!("{:?}", self.stream.position);
-
+    fn parse_module_item(&mut self) -> ParseResult<Option<Span<ModuleStatement<'a>>>> {
         seq! {
             self.consume_whitespace();
 
-            alt!(self =>
-                self.parse_import_declaration(),
-                //self.parse_export_declaration(),
-                //self.parse_statement_list_item(),
+            alt_opt!(self =>
+                with_span!(self, self.parse_import_declaration()),
+
+                /*with_span!(self, self.parse_export_declaration()),*/
+
+                with_span!(self, seq! {
+                    let statement = self.parse_statement_list_item(false, false, false);
+                    Value(ModuleStatement::Statement(statement))
+                }),
+
                 self.parse_end_of_line(),
             )
         }
     }
 
     pub fn parse_as_module(&mut self) -> Result<Module<'a>, ParseError> {
-        let mut statements = vec![];
+        // TODO should this backtrack ?
+        let statements = many0(|| self.parse_module_item());
 
-        loop {
-            // TODO should this backtrack ?
-            match with_span!(self, self.parse_module_item()) {
-                Value(v) => {
-                    statements.push(v);
-                },
-                Error(e) => {
-                    println!("{}", e);
-                    return Err(e);
-                },
-                Failed => {
-                    if let Some(_) = self.stream.next() {
-                        unreachable!();
-
-                    } else {
-                        break;
-                    }
-                },
-            }
+        match statements {
+            Value(statements) => {
+                Ok(Module { statements })
+            },
+            Error(e) => {
+                //println!("{}", e);
+                Err(e)
+            },
+            Failed => {
+                unreachable!();
+            },
         }
-
-        Ok(Module { statements })
     }
 }
 
@@ -502,22 +638,114 @@ impl<'a, 'b> Parser<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
+    use std::fs::{File, read_dir};
+    use std::io::{Read, BufReader};
+
+    fn read(s: &str) -> String {
+        let file = File::open(s).unwrap();
+        let mut buf_reader = BufReader::new(file);
+        let mut contents = String::new();
+        buf_reader.read_to_string(&mut contents).unwrap();
+        contents
+    }
+
+    fn each_file<F>(path: &str, mut f: F) where F: FnMut(&str, &Path) {
+        for file in read_dir(path).unwrap() {
+            let filename = file.unwrap().path();
+            f(&read(filename.to_str().unwrap()), &filename);
+        }
+    }
 
     #[test]
-    fn test_whitespace() {
-        assert_eq!(Parser::new("\n\n\n      \"use strict\"\ntest", "foo.js").parse_as_module(), Ok(Module {
+    fn test_empty() {
+        assert_eq!(Parser::new("", Some("foo.js")).parse_as_module(), Ok(Module {
+            statements: vec![],
+        }));
+
+        assert_eq!(Parser::new(" \n \n  \n   ", Some("foo.js")).parse_as_module(), Ok(Module {
             statements: vec![],
         }));
     }
 
     #[test]
-    fn test_import() {
-        /*assert_eq!(Parser::new("\n\n   \n     import \"bar\"", "foo.js").parse_as_module(), Ok(Module {
-            statements: vec![],
-        }));*/
+    fn test_whitespace() {
+        assert_eq!(Parser::new("\n\n\n      \"use strict\"\ntest", Some("foo.js")).parse_as_module(), Ok(Module {
+            statements: vec![
+                Span {
+                    value: ModuleStatement::Statement(Statement::Expression(Span {
+                        value: Expression::Literal(Literal::String(StringLiteral {
+                            raw_value: "\"use strict\""
+                        })),
+                        start: Position { offset: 9, line: 3, column: 6 },
+                        end: Position { offset: 21, line: 3, column: 18 },
+                    })),
+                    start: Position { offset: 9, line: 3, column: 6 },
+                    end: Position { offset: 22, line: 4, column: 0 },
+                },
+                Span {
+                    value: ModuleStatement::Statement(Statement::Expression(Span {
+                        value: Expression::Identifier(Identifier { name: "test" }),
+                        start: Position { offset: 22, line: 4, column: 0 },
+                        end: Position { offset: 26, line: 4, column: 4 },
+                    })),
+                    start: Position { offset: 22, line: 4, column: 0 },
+                    end: Position { offset: 26, line: 4, column: 4 },
+                },
+            ],
+        }));
+    }
 
-        assert_eq!(Parser::new("\n\n   \n      import 1 from \"bar\";\n", "foo.js").parse_as_module(), Ok(Module {
+    #[test]
+    fn test_import() {
+        assert_eq!(Parser::new("\n\n   \n     import \"bar\"", Some("foo.js")).parse_as_module(), Ok(Module {
+            statements: vec![
+                Span {
+                    value: ModuleStatement::Import {
+                        specifiers: vec![],
+                        filename: Span {
+                            value: StringLiteral {
+                                raw_value: "\"bar\"",
+                            },
+                            start: Position { offset: 18, line: 3, column: 12 },
+                            end: Position { offset: 23, line: 3, column: 17 },
+                        }
+                    },
+                    start: Position { offset: 11, line: 3, column: 5 },
+                    end: Position { offset: 23, line: 3, column: 17, },
+                },
+            ],
+        }));
+
+        assert_eq!(Parser::new("\n\n   \n      import 1 from \"bar\";\n", Some("foo.js")).parse_as_module(), Ok(Module {
             statements: vec![],
         }));
+    }
+
+    #[test]
+    fn test_official_pass() {
+        each_file("test/test-cases/pass", |file, filename| {
+            let explicit_filename = format!("test/test-cases/pass-explicit/{}", filename.file_name().unwrap().to_str().unwrap());
+            let explicit = read(&explicit_filename);
+
+            let normal = Parser::new(file, Some(filename.to_str().unwrap())).parse_as_module().unwrap();
+            let explicit = Parser::new(&explicit, Some(&explicit_filename)).parse_as_module().unwrap();
+
+            assert_eq!(normal, explicit);
+        });
+    }
+
+    #[test]
+    fn test_official_fail() {
+        each_file("test/test-cases/fail", |file, filename| {
+            assert!(Parser::new(file, Some(filename.to_str().unwrap())).parse_as_module().is_err());
+        });
+    }
+
+    #[test]
+    fn test_official_early() {
+        each_file("test/test-cases/early", |file, filename| {
+            assert!(Parser::new(file, Some(filename.to_str().unwrap())).parse_as_module().is_err());
+        });
     }
 }

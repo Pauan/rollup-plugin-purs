@@ -55,7 +55,7 @@ pub fn convert(context: Context, file: &str, filename: &str) -> Result<String, J
         }
     }
 
-    match parser::Parser::new(file, filename).parse_as_module() {
+    match parser::Parser::new(file, Some(filename)).parse_as_module() {
         Ok(ast) => {
             log!("{:?}", ast);
         },

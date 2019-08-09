@@ -26,6 +26,13 @@ pub struct Span<A> {
     pub end: Position,
 }
 
+/*impl<A> PartialEq for Span<A> where A: PartialEq {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}*/
+
 impl<A> std::ops::Deref for Span<A> {
     type Target = A;
 
@@ -289,6 +296,8 @@ pub struct TemplateElement<'a> {
 pub enum Expression<'a> {
     This,
     Super,
+    Identifier(Identifier<'a>),
+    Literal(Literal<'a>),
     Array {
         elements: Vec<Option<Span<Spreadable<'a, Expression<'a>>>>>,
     },
@@ -380,11 +389,9 @@ pub enum Declaration<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement<'a> {
-    Expression {
-        expression: Span<Expression<'a>>,
-    },
+    Expression(Span<Expression<'a>>),
     Block {
-        body: Vec<Span<Statement<'a>>>,
+        statements: Vec<Span<Statement<'a>>>,
     },
     Empty,
     Debugger,
