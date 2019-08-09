@@ -1,22 +1,23 @@
-use nom_locate::LocatedSpan;
-
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
     pub offset: usize,
-    pub line: u32,
+    pub line: usize,
     pub column: usize,
 }
 
 impl Position {
-    pub fn from<A>(s: &LocatedSpan<A>) -> Self where A: nom::AsBytes {
-        Self {
-            offset: s.offset,
-            line: s.line,
-            column: s.get_utf8_column(),
-        }
+    #[inline]
+    pub fn increment_column(&mut self) {
+        self.column += 1;
+    }
+
+    #[inline]
+    pub fn increment_line(&mut self) {
+        self.column = 0;
+        self.line += 1;
     }
 }
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Span<A> {
