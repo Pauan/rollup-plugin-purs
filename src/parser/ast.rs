@@ -1,22 +1,4 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Position {
-    pub offset: usize,
-    pub line: usize,
-    pub column: usize,
-}
-
-impl Position {
-    #[inline]
-    pub fn increment_column(&mut self) {
-        self.column += 1;
-    }
-
-    #[inline]
-    pub fn increment_line(&mut self) {
-        self.column = 0;
-        self.line += 1;
-    }
-}
+use super::stream::Position;
 
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,6 +21,14 @@ impl<A> std::ops::Deref for Span<A> {
     fn deref(&self) -> &Self::Target {
         &self.value
     }
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Token<'a> {
+    Identifier(Span<Identifier<'a>>),
+    Literal(Span<Literal<'a>>),
+    Newline,
 }
 
 

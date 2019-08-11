@@ -1,233 +1,16 @@
-mod types;
-pub use types::*;
+mod ast;
+pub use ast::*;
+
+#[macro_use]
+mod combinators;
+use combinators::*;
+
+mod stream;
+use stream::*;
 
 
 // https://www.ecma-international.org/ecma-262/10.0/#sec-white-space
 const WHITESPACE: &'static str = "\u{0009}\u{000B}\u{000C}\u{0020}\u{00A0}\u{FEFF}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200A}\u{202F}\u{205F}\u{3000}";
-
-
-type ParseError = String;
-
-
-enum ParseResult<A> {
-    Value(A),
-    Error(ParseError),
-    Failed,
-}
-
-use ParseResult::{Value, Error, Failed};
-
-
-fn one_of(input: char, pat: &str) -> bool {
-    for p in pat.chars() {
-        if p == input {
-            return true;
-        }
-    }
-
-    false
-}
-
-fn many0<A, F>(mut f: F) -> ParseResult<Vec<A>> where F: FnMut() -> ParseResult<Option<A>> {
-    let mut output = vec![];
-
-    loop {
-        return match f() {
-            Value(Some(value)) => {
-                output.push(value);
-                continue;
-            },
-            Value(None) => Value(output),
-            Error(e) => Error(e),
-            Failed => Failed,
-        }
-    }
-}
-
-fn each0<F>(mut f: F) -> ParseResult<()> where F: FnMut() -> ParseResult<Option<()>> {
-    loop {
-        return match f() {
-            Value(Some(_)) => continue,
-            Value(None) => Value(()),
-            Error(e) => Error(e),
-            Failed => Failed,
-        }
-    }
-}
-
-fn each1<F>(mut f: F) -> ParseResult<()> where F: FnMut() -> ParseResult<Option<()>> {
-    let mut matched = false;
-
-    loop {
-        return match f() {
-            Value(Some(_)) => {
-                matched = true;
-                continue;
-            },
-            Value(None) => {
-                if matched {
-                    Value(())
-                } else {
-                    Failed
-                }
-            },
-            Error(e) => Error(e),
-            Failed => Failed,
-        }
-    }
-}
-
-macro_rules! backtrack {
-    ($this:expr, $e:expr) => {{
-        let old_stream = $this.set_backtrack();
-
-        match $e {
-            ParseResult::Value(v) => ParseResult::Value(v),
-            v => {
-                $this.restore_backtrack(old_stream);
-                v
-            },
-        }
-    }};
-}
-
-macro_rules! alt {
-    ($this:expr => $e:expr,) => {
-        backtrack!($this, $e)
-    };
-    ($this:expr => $e:expr, $($rest:expr,)*) => {
-        match backtrack!($this, $e) {
-            ParseResult::Failed => alt!($this => $($rest,)*),
-            v => v,
-        }
-    };
-}
-
-macro_rules! alt_opt {
-    ($this:expr => $($e:expr,)+) => {
-        alt!($this =>
-            $(seq! {
-                let value = $e;
-                Value(Some(value))
-            },)+
-            Value(None),
-        )
-    };
-}
-
-macro_rules! seq {
-    ($final:expr) => {
-        $final
-    };
-    (let $v:pat = $e:expr; $($rest:tt)*) => {
-        match $e {
-            ParseResult::Value($v) => seq!($($rest)*),
-            ParseResult::Error(e) => ParseResult::Error(e),
-            ParseResult::Failed => ParseResult::Failed,
-        }
-    };
-    ($e:expr; $($rest:tt)*) => {
-        match $e {
-            ParseResult::Value(()) => seq!($($rest)*),
-            ParseResult::Error(e) => ParseResult::Error(e),
-            ParseResult::Failed => ParseResult::Failed,
-        }
-    };
-}
-
-macro_rules! with_str {
-    ($this:expr, $e:expr) => {{
-        let start = $this.stream.offset();
-
-        seq! {
-            $e;
-            ParseResult::Value(&$this.input[start..$this.stream.offset()])
-        }
-    }};
-}
-
-macro_rules! with_span {
-    ($this:expr, $e:expr) => {{
-        let start = $this.stream.position();
-
-        seq! {
-            let value = $e;
-            {
-                let end = $this.stream.position();
-                ParseResult::Value(Span { start, value, end })
-            }
-        }
-    }};
-}
-
-
-#[derive(Debug, Clone)]
-pub struct TextStream<'a> {
-    stream: std::str::Chars<'a>,
-    position: Position,
-}
-
-impl<'a> TextStream<'a> {
-    pub fn new(input: &'a str) -> Self {
-        Self {
-            stream: input.chars(),
-            position: Position {
-                offset: 0,
-                line: 0,
-                column: 0,
-            },
-        }
-    }
-
-    #[inline]
-    pub fn position(&self) -> Position {
-        self.position
-    }
-
-    #[inline]
-    pub fn offset(&self) -> usize {
-        self.position.offset
-    }
-}
-
-impl<'a> Iterator for TextStream<'a> {
-    type Item = char;
-
-    fn next(&mut self) -> Option<char> {
-        let c = self.stream.next()?;
-
-        self.position.offset += 1;
-
-        // Normalize newlines to '\n'
-        // https://www.ecma-international.org/ecma-262/10.0/#sec-line-terminators
-        match c {
-            '\u{000A}' |
-            '\u{2028}' |
-            '\u{2029}' => {
-                self.position.increment_line();
-                Some('\n')
-            },
-            // \r\n
-            '\u{000D}' => {
-                let old = self.stream.clone();
-
-                if let Some('\u{000A}') = self.stream.next() {
-                    self.position.offset += 1;
-
-                } else {
-                    self.stream = old;
-                }
-
-                self.position.increment_line();
-                Some('\n')
-            },
-            c => {
-                self.position.increment_column();
-                Some(c)
-            },
-        }
-    }
-}
 
 
 pub struct Parser<'a, 'b> {
@@ -245,7 +28,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn set_backtrack(&self) -> TextStream<'a> {
+    fn start_backtrack(&self) -> TextStream<'a> {
         self.stream.clone()
     }
 
@@ -292,66 +75,36 @@ impl<'a, 'b> Parser<'a, 'b> {
         )
     }
 
-    fn next_if<F>(&mut self, f: F) -> ParseResult<char> where F: FnOnce(char) -> bool {
-        match self.stream.next() {
-            Some(c) => {
-                if f(c) {
-                    Value(c)
 
-                } else {
-                    Failed
-                }
-            },
-            None => Failed,
-        }
-    }
-
-    fn consume_while<F>(&mut self, mut f: F) -> ParseResult<()> where F: FnMut(char) -> bool {
-        loop {
-            return match self.next_if(|x| f(x)) {
-                Value(_) => continue,
-                Error(e) => Error(e),
-                Failed => Failed,
-            };
-        }
-    }
-
-    fn consume_if<F>(&mut self, f: F) -> ParseResult<()> where F: FnOnce(char) -> bool {
-        seq! {
-            let _ = self.next_if(f);
+    fn parse_eof(&mut self) -> ParseResult<()> {
+        if let None = self.stream.next() {
             Value(())
+
+        } else {
+            Failed
         }
     }
-
-    fn consume_str(&mut self, pat: &str) -> ParseResult<()> {
-        let mut chars = pat.chars();
-
-        loop {
-            break if let Some(pat) = chars.next() {
-                seq! {
-                    self.consume_if(|c| c == pat);
-                    continue
-                }
-
-            } else {
-                Value(())
-            };
-        }
-    }
-
 
     fn parse_newline(&mut self) -> ParseResult<()> {
-        self.consume_if(|c| c == '\n')
+        self.stream.consume_char('\n')
     }
 
     fn parse_whitespace(&mut self) -> ParseResult<()> {
-        self.consume_if(|c| one_of(c, WHITESPACE))
+        self.stream.consume_if(|c| one_of(c, WHITESPACE))
     }
 
     fn parse_line_comment(&mut self) -> ParseResult<()> {
         seq! {
-            self.consume_str("//");
-            self.consume_while(|c| c != '\n')
+            self.stream.consume_str("//");
+
+            each0(|| cond!(self =>
+                alt!(self =>
+                    self.parse_newline(),
+                    self.parse_eof(),
+                ),
+                Value(None),
+                Value(Some(())),
+            ))
         }
     }
 
@@ -359,7 +112,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         let start = self.stream.position();
 
         seq! {
-            self.consume_str("/*");
+            self.stream.consume_str("/*");
 
             loop {
                 break match self.stream.next() {
@@ -375,8 +128,8 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn consume_whitespace(&mut self) -> ParseResult<()> {
-        each0(|| alt_opt!(self =>
+    fn consume_whitespace_(&mut self) -> ParseResult<Option<()>> {
+        alt_opt!(self =>
             // If there are multiple whitespace characters it will consume
             // all of them before checking the rest of the alt branches
             each1(|| alt_opt!(self =>
@@ -385,14 +138,22 @@ impl<'a, 'b> Parser<'a, 'b> {
             )),
             self.parse_line_comment(),
             self.parse_block_comment(),
-        ))
+        )
+    }
+
+    fn consume_whitespace0(&mut self) -> ParseResult<()> {
+        each0(|| self.consume_whitespace_())
+    }
+
+    fn consume_whitespace1(&mut self) -> ParseResult<()> {
+        each1(|| self.consume_whitespace_())
     }
 
     fn consume_semicolon(&mut self) -> ParseResult<()> {
         let start = self.stream.position();
 
         seq! {
-            self.consume_whitespace();
+            self.consume_whitespace0();
             {
                 let end = self.stream.position();
 
@@ -407,7 +168,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                             Value(())
                         },
                         _ => {
-                            Failed
+                            Error(self.format_error(start, "Missing ;"))
                         },
                     }
                 }
@@ -415,9 +176,79 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
+    fn parse_name_space_imports(&mut self) -> ParseResult<Vec<Span<ImportSpecifier<'a>>>> {
+        seq! {
+            self.consume_whitespace0();
+            let value = with_span!(self, seq! {
+                self.stream.consume_char('*');
+                self.consume_whitespace0();
+                self.stream.consume_str("as");
+                self.consume_whitespace1();
+                let local = with_span!(self, self.parse_identifier());
+                Value(ImportSpecifier::Namespace { local })
+            });
+            Value(vec![value])
+        }
+    }
+
+    fn parse_import_specifier(&mut self) -> ParseResult<ImportSpecifier<'a>> {
+        alt!(self =>
+            seq! {
+                self.consume_whitespace0();
+                let external = with_span!(self, self.parse_identifier_name());
+                self.consume_whitespace1();
+                self.stream.consume_str("as");
+                self.consume_whitespace1();
+                let local = with_span!(self, self.parse_identifier());
+                Value(ImportSpecifier::Single { external, local })
+            },
+            seq! {
+                let local = with_span!(self, self.parse_identifier());
+                Value(ImportSpecifier::Single {
+                    external: local.clone(),
+                    local,
+                })
+            },
+        )
+    }
+
+    fn parse_named_imports(&mut self) -> ParseResult<Vec<Span<ImportSpecifier<'a>>>> {
+        separated_list!(self, '{', '}', "identifier", with_span!(self, self.parse_import_specifier()))
+    }
+
     fn parse_import_clause(&mut self) -> ParseResult<Vec<Span<ImportSpecifier<'a>>>> {
         alt!(self =>
-            Failed,
+            self.parse_name_space_imports(),
+            self.parse_named_imports(),
+
+            seq! {
+                self.consume_whitespace1();
+
+                let local = with_span!(self, seq! {
+                    let local = with_span!(self, self.parse_identifier());
+                    Value(ImportSpecifier::Default { local })
+                });
+
+                let rest = alt_opt!(self =>
+                    seq! {
+                        self.consume_whitespace0();
+                        self.stream.consume_char(',');
+
+                        alt!(self =>
+                            self.parse_name_space_imports(),
+                            self.parse_named_imports(),
+                        )
+                    },
+                );
+
+                if let Some(mut rest) = rest {
+                    rest.insert(0, local);
+                    Value(rest)
+
+                } else {
+                    Value(vec![local])
+                }
+            },
         )
     }
 
@@ -426,7 +257,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
         seq! {
             let raw_value = with_str!(self, seq! {
-                self.consume_if(|c| c == delimiter);
+                self.stream.consume_char(delimiter);
 
                 loop {
                     break match self.stream.next() {
@@ -463,29 +294,34 @@ impl<'a, 'b> Parser<'a, 'b> {
 
     fn parse_from_clause(&mut self) -> ParseResult<StringLiteral<'a>> {
         seq! {
-            self.consume_str("from");
-            self.consume_whitespace();
+            self.stream.consume_str("from");
+            self.consume_whitespace0();
             self.parse_string()
         }
     }
 
     fn parse_import_declaration(&mut self) -> ParseResult<ModuleStatement<'a>> {
         seq! {
-            self.consume_str("import");
-            self.consume_whitespace();
-            let value = alt!(self =>
-                seq! {
-                    let filename = with_span!(self, self.parse_string());
-                    Value(ModuleStatement::Import { specifiers: vec![], filename })
-                },
+            self.stream.consume_str("import");
+            let value = {
+                let start = self.stream.position();
 
-                seq! {
-                    let specifiers = self.parse_import_clause();
-                    self.consume_whitespace();
-                    let filename = with_span!(self, self.parse_from_clause());
-                    Value(ModuleStatement::Import { specifiers, filename })
-                },
-            );
+                alt!(self =>
+                    seq! {
+                        self.consume_whitespace0();
+                        let filename = with_span!(self, self.parse_string());
+                        Value(ModuleStatement::Import { specifiers: vec![], filename })
+                    },
+
+                    seq! {
+                        let specifiers = self.parse_import_clause();
+                        let filename = with_span!(self, self.parse_from_clause());
+                        Value(ModuleStatement::Import { specifiers, filename })
+                    },
+
+                    Error(self.format_error(start, "Missing { or * or identifier")),
+                )
+            };
             // TODO should this be included in the Span ?
             self.consume_semicolon();
             Value(value)
@@ -494,7 +330,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
     fn parse_block_statement(&mut self, has_yield: bool, has_await: bool, has_return: bool) -> ParseResult<Statement<'a>> {
         seq! {
-            self.consume_if(|c| c == '{');
+            self.stream.consume_char('{');
 
             let statements = many0(|| seq! {
                 self.consume_whitespace();
@@ -502,7 +338,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 // TODO new alt combinator for this ?
                 alt!(self =>
                     seq! {
-                        self.consume_if(|c| c == '}');
+                        self.stream.consume_char('}');
                         Value(None)
                     },
                     seq! {
@@ -520,10 +356,10 @@ impl<'a, 'b> Parser<'a, 'b> {
     fn parse_identifier_name(&mut self) -> ParseResult<Identifier<'a>> {
         seq! {
             let name = with_str!(self, seq! {
-                self.consume_if(|c| c == '$' || c == '_' || c.is_ascii_alphabetic());
+                self.stream.consume_if(|c| c == '$' || c == '_' || c.is_ascii_alphabetic());
 
                 each0(|| alt_opt!(self =>
-                    self.consume_if(|c| c == '$' || c == '_' || c.is_ascii_alphanumeric()),
+                    self.stream.consume_if(|c| c == '$' || c == '_' || c.is_ascii_alphanumeric()),
                 ))
             });
 
@@ -585,17 +421,6 @@ impl<'a, 'b> Parser<'a, 'b> {
         )
     }
 
-    fn parse_end_of_line<A>(&mut self) -> ParseResult<A> {
-        let start = self.stream.position();
-
-        if let None = self.stream.next() {
-            Failed
-
-        } else {
-            Error(self.format_error(start, "Unexpected input"))
-        }
-    }
-
     fn parse_module_item(&mut self) -> ParseResult<Option<Span<ModuleStatement<'a>>>> {
         seq! {
             self.consume_whitespace();
@@ -610,7 +435,13 @@ impl<'a, 'b> Parser<'a, 'b> {
                     Value(ModuleStatement::Statement(statement))
                 }),
 
-                self.parse_end_of_line(),
+                {
+                    let start = self.stream.position();
+                    alt!(self =>
+                        self.parse_eof(),
+                        Error(self.format_error(start, "Unexpected input")),
+                    )
+                },
             )
         }
     }
