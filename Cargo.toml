@@ -14,12 +14,11 @@ crate-type = ["cdylib"]
 lto = true
 
 [dependencies]
+javascript_parser = { path = "lib/parser" }
 wasm-bindgen = "0.2.45"
 js-sys = "0.3.25"
 regex = "1.2.1"
 lazy_static = "1.3.0"
-nom = "5.0.0"
-nom_locate = "0.4.0"
 
 [dependencies.web-sys]
 version = "0.3.25"
