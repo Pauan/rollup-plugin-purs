@@ -1,232 +1,197 @@
-use super::stream::{ParseResult, Value, Error, Failed};
+pub trait Parser {
+    type Backtrack;
 
+    fn create_backtrack(&self) -> Self::Backtrack;
+    fn restore_backtrack(&mut self, backtrack: Self::Backtrack);
 
-pub fn one_of(input: char, pat: &str) -> bool {
-    for p in pat.chars() {
-        if p == input {
-            return true;
-        }
-    }
-
-    false
+    fn next(&mut self) -> Option<char>;
 }
 
-pub fn many0<A, F>(mut f: F) -> ParseResult<Vec<A>> where F: FnMut() -> ParseResult<Option<A>> {
-    let mut output = vec![];
 
-    loop {
-        return match f() {
-            Failed => Failed,
-            Value(Some(value)) => {
-                output.push(value);
-                continue;
+pub type ParseResult<A, E> = Result<A, Option<E>>;
+
+
+pub fn backtrack<P, A, E, F>(f: F) -> impl FnOnce(&mut P) -> ParseResult<A, E>
+    where P: Parser,
+          F: FnOnce(&mut P) -> ParseResult<A, E> {
+    move |p| {
+        let point = p.create_backtrack();
+
+        match f(p) {
+            Ok(s) => Ok(s),
+            Err(e) => {
+                p.restore_backtrack(point);
+                Err(e)
             },
-            Value(None) => Value(output),
-            Error(e) => Error(e),
-        }
-    }
-}
-
-pub fn each0<F>(mut f: F) -> ParseResult<()> where F: FnMut() -> ParseResult<Option<()>> {
-    loop {
-        return match f() {
-            Failed => Failed,
-            Value(Some(_)) => continue,
-            Value(None) => Value(()),
-            Error(e) => Error(e),
         }
     }
 }
 
-pub fn each1<F>(mut f: F) -> ParseResult<()> where F: FnMut() -> ParseResult<Option<()>> {
-    let mut matched = false;
 
-    loop {
-        return match f() {
-            Failed => Failed,
-            Value(Some(_)) => {
-                matched = true;
-                continue;
-            },
-            Value(None) => {
-                if matched {
-                    Value(())
-                } else {
-                    Failed
-                }
-            },
-            Error(e) => Error(e),
-        }
-    }
-}
-
-macro_rules! backtrack {
-    ($this:expr, $e:expr) => {{
-        let old_stream = $this.start_backtrack();
-
-        match $e {
-            ParseResult::Value(v) => ParseResult::Value(v),
-            v => {
-                $this.restore_backtrack(old_stream);
-                v
-            },
-        }
-    }};
-}
-
-macro_rules! alt {
-    ($this:expr => $e:expr,) => {
-        backtrack!($this, $e)
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __internal_alt {
+    ($this:expr, $e:expr,) => {
+        $e($this)
     };
-    ($this:expr => $e:expr, $($rest:expr,)*) => {
-        match backtrack!($this, $e) {
-            ParseResult::Failed => alt!($this => $($rest,)*),
+    ($this:expr, $e:expr, $($rest:expr,)*) => {
+        match $e($this) {
+            Err(None) => $crate::__internal_alt!($this, $($rest,)*),
             v => v,
         }
     };
 }
 
+#[macro_export]
+macro_rules! alt {
+    ($($e:expr,)+) => {
+        move |p| $crate::__internal_alt!(p, $($crate::backtrack($e),)+)
+    };
+}
+
+#[macro_export]
 macro_rules! alt_opt {
-    ($this:expr => $($e:expr,)+) => {
-        alt!($this =>
-            $(seq! {
-                let value = $e;
-                Value(Some(value))
-            },)+
-            Value(None),
+    ($($e:expr,)+) => {
+        $crate::alt!(
+            $(move |i| Ok(Some($e(i)?)),)+
+            |_| Ok(None),
         )
     };
 }
 
-macro_rules! seq {
-    ($final:expr) => {
-        $final
-    };
-    (let $v:pat = $e:expr; $($rest:tt)*) => {
-        match $e {
-            ParseResult::Value($v) => seq!($($rest)*),
-            ParseResult::Error(e) => ParseResult::Error(e),
-            ParseResult::Failed => ParseResult::Failed,
+
+pub fn on_fail<P, A, E, F, O>(f: F, on_fail: O) -> impl FnMut(&mut P) -> ParseResult<A, E>
+    where P: Parser,
+          F: FnMut(&mut P) -> ParseResult<A, E>,
+          O: FnMut(&mut P) -> E {
+    move |p| {
+        match f(p) {
+            Err(None) => Err(Some(on_fail(p))),
+            a => a,
         }
-    };
-    ($e:expr; $($rest:tt)*) => {
-        match $e {
-            ParseResult::Value(()) => seq!($($rest)*),
-            ParseResult::Error(e) => ParseResult::Error(e),
-            ParseResult::Failed => ParseResult::Failed,
-        }
-    };
+    }
 }
 
-macro_rules! test {
-    ($this:expr, $test:expr) => {{
-        let backup = $this.start_backtrack();
-        let result = $test;
-        $this.restore_backtrack(backup);
-        result
-    }}
+
+pub fn void<P, A, E, F>(f: F) -> impl FnMut(&mut P) -> ParseResult<(), E>
+    where P: Parser,
+          F: FnMut(&mut P) -> ParseResult<A, E> {
+    move |p| {
+        let _ = f(p)?;
+        Ok(())
+    }
 }
 
-macro_rules! cond {
-    ($this:expr => $test:expr, $yes:expr, $no:expr,) => {
-        match test!($this, $test) {
-            ParseResult::Failed => $no,
-            ParseResult::Value(()) => $yes,
-            // TODO is this correct ?
-            ParseResult::Error(e) => ParseResult::Error(e),
+
+pub fn is<P, E, F>(f: F) -> impl FnMut(&mut P) -> ParseResult<char, E>
+    where P: Parser,
+          F: FnMut(char) -> bool {
+    move |p| {
+        match p.next() {
+            Some(c) => {
+                if f(c) {
+                    Ok(c)
+
+                } else {
+                    Err(None)
+                }
+            },
+            None => Err(None),
         }
-    };
+    }
 }
 
-macro_rules! with_str {
-    ($this:expr, $e:expr) => {{
-        let start = $this.stream.offset();
-
-        seq! {
-            $e;
-            ParseResult::Value(&$this.input[start..$this.stream.offset()])
-        }
-    }};
+pub fn char<P, E>(pat: char) -> impl FnMut(&mut P) -> ParseResult<(), E> where P: Parser {
+    void(is(move |c| c == pat))
 }
 
-macro_rules! with_span {
-    ($this:expr, $e:expr) => {{
-        let start = $this.stream.position();
-
-        seq! {
-            let value = $e;
-            {
-                let end = $this.stream.position();
-                ParseResult::Value(Span { start, value, end })
+pub fn one_of<'a, P, E>(pat: &'a str) -> impl FnMut(&mut P) -> ParseResult<(), E> + 'a
+    where P: Parser + 'a,
+          E: 'a {
+    void(is(move |c| {
+        for pat in pat.chars() {
+            if pat == c {
+                return true;
             }
         }
-    }};
+
+        false
+    }))
 }
 
-// Good:  {}
-// Good:  {foo}
-// Good:  {foo,}
-// Good:  {foo,bar}
-// Good:  {foo,bar,}
-//  Bad:  {,}
-//  Bad:  {foo bar}
-//  Bad:  {foo,,}
-macro_rules! separated_list {
-    ($this:expr, $left:expr, $right:expr, $message:expr, $e:expr) => {{
-        let start = $this.stream.position();
-        let mut seen = false;
+// TODO make this faster ?
+pub fn eq<P, E>(pat: &str) -> impl FnMut(&mut P) -> ParseResult<(), E> + '_
+    where P: Parser {
+    move |p| {
+        let chars = pat.chars();
 
-        seq! {
-            $this.stream.consume_char($left);
-
-            many0(|| seq! {
-                $this.consume_whitespace();
-
-                // TODO new alt combinator for this ?
-                alt!($this =>
-                    seq! {
-                        $this.stream.consume_char($right);
-                        Value(None)
-                    },
-                    seq! {
-                        if seen {
-                            alt!($this =>
-                                seq! {
-                                    $this.stream.consume_char(',');
-                                    $this.consume_whitespace()
-                                },
-                                Error($this.format_error(start, "Missing ,")),
-                            )
-
-                        } else {
-                            Value(())
-                        };
-
-                        alt!($this =>
-                            if seen {
-                                seq! {
-                                    $this.stream.consume_char($right);
-                                    Value(None)
-                                }
-
-                            } else {
-                                Failed
-                            },
-
-                            seq! {
-                                let value = $e;
-
-                                {
-                                    seen = true;
-                                    Value(Some(value))
-                                }
-                            },
-
-                            Error($this.format_error(start, &format!("Missing {} or {}", $message, $right))),
-                        )
-                    },
-                )
-            })
+        loop {
+            match chars.next() {
+                Some(pat) => {
+                    char(pat)(p)?;
+                },
+                None => {
+                    return Ok(());
+                },
+            }
         }
-    }};
+    }
+}
+
+pub fn many0<P, A, E, F>(mut f: F) -> impl FnMut(&mut P) -> ParseResult<Vec<A>, E>
+    where P: Parser,
+          F: FnMut(&mut P) -> ParseResult<Option<A>, E> {
+    move |p| {
+        let mut output = vec![];
+
+        loop {
+            return match f(p)? {
+                Some(value) => {
+                    output.push(value);
+                    continue;
+                },
+                None => {
+                    Ok(output)
+                },
+            }
+        }
+    }
+}
+
+pub fn each0<P, E, F>(mut f: F) -> impl FnMut(&mut P) -> ParseResult<(), E>
+    where P: Parser,
+          F: FnMut(&mut P) -> ParseResult<Option<()>, E> {
+    move |p| {
+        loop {
+            return match f(p)? {
+                Some(_) => continue,
+                None => Ok(()),
+            }
+        }
+    }
+}
+
+pub fn each1<P, E, F>(mut f: F) -> impl FnMut(&mut P) -> ParseResult<(), E>
+    where P: Parser,
+          F: FnMut(&mut P) -> ParseResult<Option<()>, E> {
+    move |p| {
+        let mut matched = false;
+
+        loop {
+            return match f(p)? {
+                Some(_) => {
+                    matched = true;
+                    continue;
+                },
+                None => {
+                    if matched {
+                        Ok(())
+
+                    } else {
+                        Err(None)
+                    }
+                },
+            }
+        }
+    }
 }

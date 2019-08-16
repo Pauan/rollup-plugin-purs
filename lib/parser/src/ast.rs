@@ -4,39 +4,6 @@ use regex::{Regex, Captures};
 use lazy_static::lazy_static;
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Position {
-    pub offset: usize,
-    pub line: usize,
-    pub column: usize,
-}
-
-impl Position {
-    #[inline]
-    pub fn increment_column(&mut self) {
-        self.offset += 1;
-        self.column += 1;
-    }
-
-    #[inline]
-    pub fn increment_line(&mut self) {
-        self.offset += 1;
-        self.column = 0;
-        self.line += 1;
-    }
-}
-
-impl Default for Position {
-    fn default() -> Self {
-        Position {
-            offset: 0,
-            line: 0,
-            column: 0,
-        }
-    }
-}
-
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Location {
     pub start: Position,

@@ -856,8 +856,13 @@ impl<'a, 'b> TokenStream<'a, 'b> {
         }
     }
 
-    pub fn next(&mut self, is_expression: bool, is_template: bool) -> Option<Result<Token<'a>, ParseError>> {
-        let c = self.stream.next()?;
-        Some(self.parse(c, is_expression, is_template))
+    pub fn next(&mut self, is_expression: bool, is_template: bool) -> Result<Option<Token<'a>>, ParseError> {
+        match self.stream.next() {
+            None => Ok(None),
+            Some(c) => match self.parse(c, is_expression, is_template) {
+                Ok(token) => Ok(Some(token)),
+                Err(e) => Err(e),
+            },
+        }
     }
 }

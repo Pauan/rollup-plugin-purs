@@ -1,4 +1,12 @@
+#[macro_use]
+mod combinators;
+pub use combinators::*;
+
+mod stream;
+pub use stream::*;
+
 pub mod ast;
+use ast::{Location, Position};
 
 mod token;
 use token::*;
@@ -6,11 +14,80 @@ use token::*;
 pub use token::ParseError;
 
 
+fn consume_whitespace(p: &mut TextStream) -> ParseResult<(), ParseError> {
+    unimplemented!();
+}
+
+
+// Good:  {}
+// Good:  {foo}
+// Good:  {foo,}
+// Good:  {foo,bar}
+// Good:  {foo,bar,}
+//  Bad:  {,}
+//  Bad:  {foo bar}
+//  Bad:  {foo,,}
+pub fn separated_list<'a, A, F>(left: char, right: char, message: &'a str, mut f: F) -> impl FnMut(&mut TextStream) -> ParseResult<Vec<A>, ParseError> + 'a
+    where F: FnMut(&mut TextStream) -> ParseResult<A, ParseError> + 'a {
+    move |p| {
+        let start = p.position();
+
+        char(left)(p)?;
+
+        let mut seen = false;
+
+        many0(|p| {
+            consume_whitespace(p)?;
+
+            // TODO new alt combinator for this ?
+            alt!(
+                |p| {
+                    char(right)(p)?;
+                    Ok(None)
+                },
+                |p| {
+                    if seen {
+                        on_fail(
+                            |p| {
+                                char(',')(p)?;
+                                consume_whitespace(p)
+                            },
+                            |p| p.error(start, "Expected ,"),
+                        )(p)?;
+                    }
+
+                    on_fail(
+                        alt!(
+                            |p| {
+                                if seen {
+                                    char(right)(p)?;
+                                    Ok(None)
+
+                                } else {
+                                    Err(None)
+                                }
+                            },
+                            |p| {
+                                let value = f(p)?;
+                                seen = true;
+                                Ok(Some(value))
+                            },
+                        ),
+                        |p| p.error(start, &format!("Expected {} or {}", message, right)),
+                    )(p)
+                },
+            )(p)
+        })(p)
+    }
+}
+
+
+
 pub struct Parser<'a, 'b> {
     input: &'a str,
     filename: Option<&'b str>,
     stream: TokenStream<'a, 'b>,
-    peeked: Option<Option<Result<Token<'a>, ParseError>>>,
+    //peeked: Option<Option<Result<Token<'a>, ParseError>>>,
     is_expression: bool,
     is_template: bool,
 }
@@ -21,62 +98,175 @@ impl<'a, 'b> Parser<'a, 'b> {
             input,
             filename,
             stream: TokenStream::new(input, filename),
-            peeked: None,
+            //peeked: None,
             is_expression: true,
             is_template: false,
         }
     }
 
-    fn next(&mut self, is_expression: bool, is_template: bool) -> Option<Result<Token<'a>, ParseError>> {
-        match self.peeked.take() {
-            Some(v) => v,
-            None => self.stream.next(is_expression, is_template),
-        }
+    fn error<A>(&self, start: Position, message: &str) -> Result<A, ParseError> {
+        Err(format_error(self.input, self.filename, start, message))
     }
 
-    fn peek(&mut self, is_expression: bool, is_template: bool) -> Option<&Result<Token<'a>, ParseError>> {
+    fn next(&mut self, is_expression: bool, is_template: bool) -> Result<Option<Token<'a>>, ParseError> {
+        self.stream.next(is_expression, is_template)
+
+        /*match self.peeked.take() {
+            Some(v) => v,
+            None => self.stream.next(is_expression, is_template),
+        }*/
+    }
+
+    /*fn peek(&mut self, is_expression: bool, is_template: bool) -> &Result<Option<Token<'a>>, ParseError> {
         let stream = &mut self.stream;
         self.peeked.get_or_insert_with(|| stream.next(is_expression, is_template)).as_ref()
-    }
+    }*/
 
 
     fn statement_list_item(&mut self, ident: ast::Identifier<'a>, can_yield: bool, can_await: bool, can_return: bool) -> Result<ast::Statement<'a>, ParseError> {
         unimplemented!();
     }
 
+    fn expression(&mut self) -> Result<ast::Expression<'a>, ParseError> {
+        unimplemented!();
+    }
+
+
+    fn template(&mut self, tag: Option<Box<ast::Expression<'a>>>, kind: TemplateKind, raw: ast::TemplateRaw<'a>) -> Result<ast::Template<'a>, ParseError> {
+        let start = raw.location.start;
+        let mut end = raw.location.end;
+
+        let mut parts = vec![ast::TemplatePart::TemplateRaw(raw)];
+
+        match kind {
+            TemplateKind::Whole => {},
+            TemplateKind::Start => {
+                'top: loop {
+                    parts.push(ast::TemplatePart::Expression(self.expression()?));
+
+                    loop {
+                        match self.next(false, true)? {
+                            None => self.error(start, "Missing ending `")?,
+
+                            Some(Token::Newline) => {
+                                continue;
+                            },
+
+                            Some(Token::Template { kind, raw }) => {
+                                parts.push(ast::TemplatePart::TemplateRaw(raw));
+
+                                match kind {
+                                    TemplateKind::Middle => {
+                                        break;
+                                    },
+                                    TemplateKind::End => {
+                                        end = raw.location.end;
+                                        break 'top;
+                                    },
+                                    _ => unreachable!(),
+                                }
+                            },
+
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            },
+            _ => unreachable!(),
+        }
+
+        Ok(ast::Template {
+            tag,
+            parts,
+            location: Location { start, end },
+        })
+    }
+
+
     pub fn parse_as_module(&mut self) -> Result<ast::Module<'a>, ParseError> {
         let mut statements = vec![];
 
         loop {
-            match self.next(self.is_expression, self.is_template) {
-                Some(value) => {
-                    match value? {
-                        Token::Newline => {
-                            continue;
-                        },
-                        Token::Literal(lit) => {
-                            statements.push(ast::ModuleStatement::Statement(ast::Statement::Expression(ast::Expression::Literal(lit))));
-                            continue;
-                        },
-                        Token::Template { kind, raw } => {
-                        },
-                        Token::Punctuation { value, location } => {
-                        },
-                        Token::Identifier(ident) => {
-                            /*match ident.raw_value() {
-                                "import" => {
-
-                                },
-                                "export" => {
-
-                                },
-                                ident => self.statement_list_item(ident, false, false, false),
-                            }*/
-                        },
-                    }
-                },
+            match self.next(true, false)? {
                 None => {
                     return Ok(ast::Module { statements });
+                },
+                Some(Token::Newline) => {
+                    continue;
+                },
+                Some(Token::Literal(lit)) => {
+                    statements.push(ast::ModuleStatement::Statement(
+                        ast::Statement::Expression(
+                            ast::Expression::Literal(lit)
+                        )
+                    ));
+                },
+                Some(Token::Template { kind, raw }) => {
+                    statements.push(ast::ModuleStatement::Statement(
+                        ast::Statement::Expression(
+                            ast::Expression::Literal(
+                                ast::Literal::Template(self.template(None, kind, raw)?)
+                            )
+                        )
+                    ));
+                },
+                Some(Token::Punctuation { value, location }) => {
+                },
+                Some(Token::Identifier(ident)) => {
+                    statements.push(match ident.raw_value {
+                        "import" => {
+                            match self.next(true, false)? {
+                                Some(Token::Punctuation { value: "*", .. }) => {
+
+                                },
+                                Some(Token::Punctuation { value: "{", .. }) => {
+
+                                },
+                                Some(Token::Identifier(ident)) => {
+                                    let mut specifiers = vec![];
+
+                                    match self.next(false, false)? {
+                                        Some(Token::Punctuation { value: ",", .. }) => {
+                                            match self.next(true, false)? {
+                                                Some(Token::Punctuation { value: "*", .. }) => {
+                                                },
+                                                Some(Token::Punctuation { value: "{", .. }) => {
+                                                },
+                                                Some(token)
+                                                _ => {
+                                                    self.error()
+                                                },
+                                            }
+                                        },
+                                        Some(Token::Punctuation { value: ";", .. }) |
+                                        Some(Token::Newline) |
+                                        None => {},
+                                        Some(token) => {
+                                            self.error(token.location.start, "Unexpected token")?
+                                        },
+                                    }
+
+                                    ast::ModuleStatement::Import {
+                                        specifiers,
+                                        filename: string,
+                                    }
+                                },
+                                Some(Token::Literal(ast::Literal::String(string))) => {
+                                    ast::ModuleStatement::Import {
+                                        specifiers: vec![],
+                                        filename: string,
+                                    }
+                                },
+                                _ => {
+                                    self.error(ident.location.end, "Expected * or { or identifier or string")?
+                                },
+                            }
+                        },
+                        "export" => {
+
+                        },
+                        _ => ast::ModuleStatement::Statement(self.statement_list_item(ident, false, false, false)?),
+                    });
                 },
             }
         }
