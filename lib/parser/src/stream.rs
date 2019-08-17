@@ -32,15 +32,11 @@ impl<'a, 'b> TextStream<'a, 'b> {
             },
         }
     }
-
-    #[inline]
-    pub fn slice(&self, start: usize, end: usize) -> &'a str {
-        &self.input[start..end]
-    }
 }
 
 
 impl<'a, 'b> Parser for TextStream<'a, 'b> {
+    type Slice = &'a str;
     type Backtrack = TextStreamState<'a>;
     type Error = ParseError;
 
@@ -70,7 +66,7 @@ impl<'a, 'b> Parser for TextStream<'a, 'b> {
                 match self.state.stream.next() {
                     // \r\n
                     Some('\u{000A}') => {},
-                    None => {
+                    _ => {
                         self.state.stream = clone;
                     },
                 }
@@ -93,6 +89,11 @@ impl<'a, 'b> Parser for TextStream<'a, 'b> {
             column: self.state.column,
             line: self.state.line,
         }
+    }
+
+    #[inline]
+    fn slice(&self, start: usize, end: usize) -> Self::Slice {
+        &self.input[start..end]
     }
 
     // TODO improve this somehow

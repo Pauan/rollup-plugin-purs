@@ -1,3 +1,3 @@
-[submodule "test/test-cases"]
-	path = test/test-cases
+[submodule "lib/parser/test262-parser-tests"]
+	path = lib/parser/test262-parser-tests
 	url = https://github.com/tc39/test262-parser-tests.git

@@ -12,6 +12,7 @@ pub type ParseResult<A, E> = Result<A, Option<E>>;
 pub trait Parser {
     type Backtrack;
     type Error;
+    type Slice;
 
     fn create_backtrack(&self) -> Self::Backtrack;
 
@@ -20,6 +21,8 @@ pub trait Parser {
     fn next(&mut self) -> Option<char>;
 
     fn position(&self) -> Position;
+
+    fn slice(&self, start: usize, end: usize) -> Self::Slice;
 
     fn error(&self, start: Position, message: &str) -> Self::Error;
 }
@@ -180,7 +183,7 @@ pub fn any_char<P, E>(p: &mut P) -> ParseResult<(), E> where P: Parser {
 
 // TODO make this faster ?
 pub fn eq<P, E>(p: &mut P, pat: &str) -> ParseResult<(), E> where P: Parser {
-    let chars = pat.chars();
+    let mut chars = pat.chars();
 
     loop {
         match chars.next() {

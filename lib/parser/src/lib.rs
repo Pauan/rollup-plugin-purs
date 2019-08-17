@@ -77,10 +77,10 @@ fn is_whitespace(c: char) -> bool {
 //  Bad:  {,}
 //  Bad:  {foo bar}
 //  Bad:  {foo,,}
-fn separated_list<A, F>(p: &mut TextStream, left: char, right: char, message: &str, mut f: F) -> ParseResult<Vec<A>, ParseError>
-    where F: FnMut(&mut TextStream) -> ParseResult<A, ParseError> {
-    let start = p.position();
-
+fn separated_list<P, A, F, S>(p: &mut P, left: char, mut f: F, mut sep: S, right: char) -> ParseResult<Vec<A>, P::Error>
+    where P: Parser,
+          S: FnMut(&mut P) -> ParseResult<(), P::Error>,
+          F: FnMut(&mut P) -> ParseResult<A, P::Error> {
     char(p, left)?;
 
     let mut seen = false;
@@ -96,33 +96,24 @@ fn separated_list<A, F>(p: &mut TextStream, left: char, right: char, message: &s
             },
             |p| {
                 if seen {
-                    on_fail(p,
-                        |p| {
-                            char(p, ',')?;
-                            parse_whitespace(p)
-                        },
-                        |p| p.error(start, "Expected ,"),
-                    )?;
+                    sep(p)?;
                 }
 
-                on_fail(p,
-                    |p| alt!(p,
-                        |p| {
-                            if seen {
-                                char(p, right)?;
-                                Ok(None)
+                alt!(p,
+                    |p| {
+                        if seen {
+                            char(p, right)?;
+                            Ok(None)
 
-                            } else {
-                                Err(None)
-                            }
-                        },
-                        |p| {
-                            let value = f(p)?;
-                            seen = true;
-                            Ok(Some(value))
-                        },
-                    ),
-                    |p| p.error(start, &format!("Expected {} or {}", message, right)),
+                        } else {
+                            Err(None)
+                        }
+                    },
+                    |p| {
+                        let value = f(p)?;
+                        seen = true;
+                        Ok(Some(value))
+                    },
                 )
             },
         )
@@ -130,7 +121,7 @@ fn separated_list<A, F>(p: &mut TextStream, left: char, right: char, message: &s
 }
 
 
-fn is_number_or_identifier(p: &mut TextStream) -> ParseResult<bool, ParseError> {
+fn is_number_or_identifier<P>(p: &mut P) -> ParseResult<bool, P::Error> where P: Parser {
     if let Some(_) = peek(p, |p| char_if(p, |c| c.is_ascii_digit() || is_identifier_start(c)))? {
         Ok(true)
 
@@ -140,12 +131,12 @@ fn is_number_or_identifier(p: &mut TextStream) -> ParseResult<bool, ParseError> 
 }
 
 
-fn parse_hex_digit(p: &mut TextStream) -> ParseResult<(), ParseError> {
+fn parse_hex_digit<P>(p: &mut P) -> ParseResult<(), P::Error> where P: Parser {
     error(p, |p| void(|| char_if(p, |c| c.is_ascii_hexdigit())), HEX_DIGIT_ERROR)
 }
 
 
-fn parse_unicode_code_point(p: &mut TextStream, start: Position, end: Position) -> ParseResult<char, ParseError> {
+fn parse_unicode_code_point<'a, P>(p: &mut P, start: Position, end: Position) -> ParseResult<char, P::Error> where P: Parser<Slice = &'a str> {
     match hex_to_char(p.slice(start.offset, end.offset)) {
         Some(c) => Ok(c),
         None => Err(Some(p.error(start, "Invalid Unicode code point"))),
@@ -153,7 +144,7 @@ fn parse_unicode_code_point(p: &mut TextStream, start: Position, end: Position) 
 }
 
 // https://www.ecma-international.org/ecma-262/10.0/#prod-UnicodeEscapeSequence
-fn parse_unicode_escape_sequence(p: &mut TextStream) -> ParseResult<char, ParseError> {
+fn parse_unicode_escape_sequence<'a, P>(p: &mut P) -> ParseResult<char, P::Error> where P: Parser<Slice = &'a str> {
     alt!(p,
         |p| {
             char(p, '{')?;
@@ -194,7 +185,7 @@ fn parse_unicode_escape_sequence(p: &mut TextStream) -> ParseResult<char, ParseE
 }
 
 
-fn parse_escape(p: &mut TextStream, start: Position) -> ParseResult<(), ParseError> {
+fn parse_escape<'a, P>(p: &mut P, start: Position) -> ParseResult<(), P::Error> where P: Parser<Slice = &'a str> {
     on_fail(p,
         |p| alt!(p,
             |p| {
@@ -228,7 +219,69 @@ fn parse_escape(p: &mut TextStream, start: Position) -> ParseResult<(), ParseErr
 }
 
 
-fn parse_string_delimiter<'a, 'b>(p: &mut TextStream<'a, 'b>, delimiter: char) -> ParseResult<ast::String<'a>, ParseError> {
+fn parse_line_comment<P>(p: &mut P) -> ParseResult<(), P::Error> where P: Parser {
+    char(p, '/')?;
+    char(p, '/')?;
+    each0(|| alt_opt!(p,
+        |p| void(|| char_if(p, |c| c != '\n')),
+    ))
+}
+
+fn parse_block_comment<P>(p: &mut P) -> ParseResult<(), P::Error> where P: Parser {
+    let start = p.position();
+
+    char(p, '/')?;
+    char(p, '*')?;
+
+    on_fail(p,
+        |p| each0(|| alt!(p,
+            |p| {
+                char(p, '*')?;
+                char(p, '/')?;
+                Ok(None)
+            },
+            |p| {
+                any_char(p)?;
+                Ok(Some(()))
+            },
+        )),
+        |p| p.error(start, "Missing ending */"),
+    )
+}
+
+fn parse_whitespace<P>(p: &mut P) -> ParseResult<(), P::Error> where P: Parser {
+    each0(|| alt_opt!(p,
+        |p| char(p, '\n'),
+        |p| void(|| char_if(p, is_whitespace)),
+        parse_line_comment,
+        parse_block_comment,
+    ))
+}
+
+fn parse_semicolon<P>(p: &mut P) -> ParseResult<(), P::Error> where P: Parser {
+    let start = p.position();
+
+    parse_whitespace(p)?;
+
+    alt!(p,
+        |p| eof(p),
+        |p| char(p, ';'),
+        |p| {
+            let end = p.position();
+
+            // This compares the position so that way it will work even for block comments
+            if end.line > start.line {
+                Ok(())
+
+            } else {
+                Err(Some(p.error(start, "Expected ; or newline")))
+            }
+        },
+    )
+}
+
+
+fn parse_string_delimiter<'a, P>(p: &mut P, delimiter: char) -> ParseResult<ast::String<'a>, P::Error> where P: Parser<Slice = &'a str> {
     let start = p.position();
 
     char(p, delimiter)?;
@@ -267,7 +320,7 @@ fn parse_string_delimiter<'a, 'b>(p: &mut TextStream<'a, 'b>, delimiter: char) -
     })
 }
 
-fn parse_string<'a, 'b>(p: &mut TextStream<'a, 'b>) -> ParseResult<ast::String<'a>, ParseError> {
+fn parse_string<'a, P>(p: &mut P) -> ParseResult<ast::String<'a>, P::Error> where P: Parser<Slice = &'a str> {
     alt!(p,
         |p| parse_string_delimiter(p, '"'),
         |p| parse_string_delimiter(p, '\''),
@@ -275,47 +328,7 @@ fn parse_string<'a, 'b>(p: &mut TextStream<'a, 'b>) -> ParseResult<ast::String<'
 }
 
 
-fn parse_line_comment(p: &mut TextStream) -> ParseResult<(), ParseError> {
-    char(p, '/')?;
-    char(p, '/')?;
-    each0(|| alt_opt!(p,
-        |p| void(|| char_if(p, |c| c != '\n')),
-    ))
-}
-
-fn parse_block_comment(p: &mut TextStream) -> ParseResult<(), ParseError> {
-    let start = p.position();
-
-    char(p, '/')?;
-    char(p, '*')?;
-
-    on_fail(p,
-        |p| each0(|| alt!(p,
-            |p| {
-                char(p, '*')?;
-                char(p, '/')?;
-                Ok(None)
-            },
-            |p| {
-                any_char(p)?;
-                Ok(Some(()))
-            },
-        )),
-        |p| p.error(start, "Missing ending */"),
-    )
-}
-
-fn parse_whitespace(p: &mut TextStream) -> ParseResult<(), ParseError> {
-    each0(|| alt_opt!(p,
-        |p| char(p, '\n'),
-        |p| void(|| char_if(p, is_whitespace)),
-        parse_line_comment,
-        parse_block_comment,
-    ))
-}
-
-
-fn parse_regexp<'a>(p: &mut TextStream<'a, '_>) -> ParseResult<ast::RegExp<'a>, ParseError> {
+fn parse_regexp<'a, P>(p: &mut P) -> ParseResult<ast::RegExp<'a>, P::Error> where P: Parser<Slice = &'a str> {
     let start = p.position();
 
     char(p, '/')?;
@@ -383,7 +396,7 @@ fn parse_regexp<'a>(p: &mut TextStream<'a, '_>) -> ParseResult<ast::RegExp<'a>, 
 }
 
 
-fn parse_template<'a>(p: &mut TextStream<'a, '_>, tag: Option<Box<ast::Expression<'a>>>) -> ParseResult<ast::Template<'a>, ParseError> {
+fn parse_template<'a, P>(p: &mut P, tag: Option<Box<ast::Expression<'a>>>) -> ParseResult<ast::Template<'a>, P::Error> where P: Parser<Slice = &'a str> {
     let start = p.position();
 
     char(p, '`')?;
@@ -410,7 +423,7 @@ fn parse_template<'a>(p: &mut TextStream<'a, '_>, tag: Option<Box<ast::Expressio
                     char(p, '\\')?;
 
                     on_fail(p,
-                        any_char,
+                        |p| any_char(p),
                         |p| p.error(end, "Missing escape sequence"),
                     )?;
 
@@ -442,7 +455,7 @@ fn parse_template<'a>(p: &mut TextStream<'a, '_>, tag: Option<Box<ast::Expressio
 
                             Ok(Some(()))
                         },
-                        |p| {
+                        |_| {
                             // TODO is this correct ?
                             Ok(Some(()))
                         },
@@ -467,7 +480,10 @@ fn parse_template<'a>(p: &mut TextStream<'a, '_>, tag: Option<Box<ast::Expressio
 }
 
 
-fn parse_identifier_unicode<F>(p: &mut TextStream, start: Position, f: F) -> ParseResult<(), ParseError> where F: FnOnce(char) -> bool {
+fn parse_identifier_unicode<'a, P, F>(p: &mut P, start: Position, f: F) -> ParseResult<(), P::Error>
+    where P: Parser<Slice = &'a str>,
+          F: FnOnce(char) -> bool {
+
     error(p, |p| char(p, 'u'), "Expected u")?;
 
     if f(parse_unicode_escape_sequence(p)?) {
@@ -479,7 +495,7 @@ fn parse_identifier_unicode<F>(p: &mut TextStream, start: Position, f: F) -> Par
 }
 
 // https://www.ecma-international.org/ecma-262/10.0/#prod-IdentifierName
-fn parse_identifier<'a>(p: &mut TextStream<'a, '_>) -> ParseResult<ast::Identifier<'a>, ParseError> {
+fn parse_identifier<'a, P>(p: &mut P) -> ParseResult<ast::Identifier<'a>, P::Error> where P: Parser<Slice = &'a str> {
     let start = p.position();
 
     let c = char_if(p, is_identifier_start)?;
@@ -509,19 +525,23 @@ fn parse_identifier<'a>(p: &mut TextStream<'a, '_>) -> ParseResult<ast::Identifi
     })
 }
 
-fn parse_binding_identifier<'a>(p: &mut TextStream<'a, '_>) -> ParseResult<ast::Identifier<'a>, ParseError> {
-    let ident = parse_identifier(p)?;
-
+fn assert_not_reserved_word<P>(p: &mut P, ident: &ast::Identifier) -> ParseResult<(), P::Error> where P: Parser {
     if ident.is_reserved_word() {
         Err(Some(p.error(ident.location.start, "Cannot use reserved word as variable")))
 
     } else {
-        Ok(ident)
+        Ok(())
     }
 }
 
+fn parse_binding_identifier<'a, P>(p: &mut P) -> ParseResult<ast::Identifier<'a>, P::Error> where P: Parser<Slice = &'a str> {
+    let ident = parse_identifier(p)?;
+    assert_not_reserved_word(p, &ident)?;
+    Ok(ident)
+}
 
-fn parse_keyword(p: &mut TextStream, name: &str) -> ParseResult<(), ParseError> {
+
+fn parse_keyword<P>(p: &mut P, name: &str) -> ParseResult<(), P::Error> where P: Parser {
     eq(p, name)?;
 
     // TODO is this correct ?
@@ -535,13 +555,13 @@ fn parse_keyword(p: &mut TextStream, name: &str) -> ParseResult<(), ParseError> 
 
 
 
-fn parse_decimal_digits0(p: &mut TextStream) -> ParseResult<(), ParseError> {
+fn parse_decimal_digits0<P>(p: &mut P) -> ParseResult<(), P::Error> where P: Parser {
     each0(|| alt_opt!(p,
         |p| void(|| char_if(p, |c| c.is_ascii_digit())),
     ))
 }
 
-fn parse_decimal_digits1(p: &mut TextStream) -> ParseResult<(), ParseError> {
+fn parse_decimal_digits1<P>(p: &mut P) -> ParseResult<(), P::Error> where P: Parser {
     error(p,
         |p| each1(|| alt_opt!(p,
             |p| void(|| char_if(p, |c| c.is_ascii_digit())),
@@ -550,7 +570,7 @@ fn parse_decimal_digits1(p: &mut TextStream) -> ParseResult<(), ParseError> {
     )
 }
 
-fn parse_decimal_number(p: &mut TextStream) -> ParseResult<(), ParseError> {
+fn parse_decimal_number<P>(p: &mut P) -> ParseResult<(), P::Error> where P: Parser {
     optional(p, |p| {
         char(p, '.')?;
         parse_decimal_digits0(p)
@@ -561,13 +581,13 @@ fn parse_decimal_number(p: &mut TextStream) -> ParseResult<(), ParseError> {
     Ok(())
 }
 
-fn parse_exponent_part(p: &mut TextStream) -> ParseResult<(), ParseError> {
+fn parse_exponent_part<P>(p: &mut P) -> ParseResult<(), P::Error> where P: Parser {
     char_if(p, |c| c == 'e' || c == 'E')?;
     optional(p, |p| char_if(p, |c| c == '+' || c == '-'))?;
     parse_decimal_digits1(p)
 }
 
-fn parse_after_number(p: &mut TextStream) -> ParseResult<(), ParseError> {
+fn parse_after_number<P>(p: &mut P) -> ParseResult<(), P::Error> where P: Parser {
     let start = p.position();
 
     if is_number_or_identifier(p)? {
@@ -578,55 +598,181 @@ fn parse_after_number(p: &mut TextStream) -> ParseResult<(), ParseError> {
 }
 
 
-fn parse_module<'a>(p: &mut TextStream<'a, '_>) -> ParseResult<ast::Module<'a>, ParseError> {
+fn parse_expression<'a, P>(p: &mut P) -> ParseResult<ast::Expression<'a>, P::Error> where P: Parser {
+    unimplemented!();
+}
+
+
+fn parse_statement<'a, P>(p: &mut P) -> ParseResult<ast::Statement<'a>, P::Error> where P: Parser {
+    unimplemented!();
+}
+
+
+fn parse_from_clause<'a, P>(p: &mut P) -> ParseResult<ast::String<'a>, P::Error> where P: Parser<Slice = &'a str> {
+    parse_keyword(p, "from")?;
+    parse_whitespace(p)?;
+    let filename = parse_string(p)?;
+    parse_semicolon(p)?;
+    Ok(filename)
+}
+
+fn parse_specifier<'a, P>(p: &mut P) -> ParseResult<ast::Specifier<'a>, P::Error> where P: Parser<Slice = &'a str> {
+    let external = parse_identifier(p)?;
+
+    let local = optional(p, |p| {
+        parse_whitespace(p)?;
+        parse_keyword(p, "as")?;
+        parse_whitespace(p)?;
+        error(p, |p| parse_binding_identifier(p), "Expected identifier")
+    })?;
+
+    if let Some(local) = local {
+        Ok(ast::Specifier { external: Some(external), local })
+
+    } else {
+        assert_not_reserved_word(p, &external)?;
+        Ok(ast::Specifier { external: None, local: external })
+    }
+}
+
+fn parse_named_imports<'a, P>(p: &mut P, start: Position, default: Option<ast::Identifier<'a>>) -> ParseResult<ast::ModuleStatement<'a>, P::Error>
+    where P: Parser<Slice = &'a str> {
+
+    let specifiers = separated_list(p,
+        '{',
+        |p| error(p, |p| parse_specifier(p), "Expected identifier or }"),
+        |p| {
+            error(p, |p| char(p, ','), "Expected , or }")?;
+            parse_whitespace(p)
+        },
+        '}',
+    )?;
+
+    parse_whitespace(p)?;
+    let filename = parse_from_clause(p)?;
+
+    let end = p.position();
+
+    Ok(ast::ModuleStatement::Import {
+        default,
+        namespace: None,
+        specifiers,
+        filename,
+        location: Location { start, end },
+    })
+}
+
+fn parse_namespace_import<'a, P>(p: &mut P, start: Position, default: Option<ast::Identifier<'a>>) -> ParseResult<ast::ModuleStatement<'a>, P::Error>
+    where P: Parser<Slice = &'a str> {
+
+    char(p, '*')?;
+    parse_whitespace(p)?;
+    error(p, |p| parse_keyword(p, "as"), "Expected as")?;
+    parse_whitespace(p)?;
+    let namespace = error(p, |p| parse_binding_identifier(p), "Expected identifier")?;
+    parse_whitespace(p)?;
+    let filename = parse_from_clause(p)?;
+
+    let end = p.position();
+
+    Ok(ast::ModuleStatement::Import {
+        default,
+        namespace: Some(namespace),
+        specifiers: vec![],
+        filename,
+        location: Location { start, end },
+    })
+}
+
+
+fn parse_import<'a, P>(p: &mut P) -> ParseResult<ast::ModuleStatement<'a>, P::Error> where P: Parser<Slice = &'a str> {
+    let start = p.position();
+
+    parse_keyword(p, "import")?;
+    parse_whitespace(p)?;
+
+    error(p,
+        |p| alt!(p,
+            |p| parse_namespace_import(p, start, None),
+            |p| parse_named_imports(p, start, None),
+            |p| {
+                let filename = parse_string(p)?;
+                parse_semicolon(p)?;
+
+                let end = p.position();
+
+                Ok(ast::ModuleStatement::Import {
+                    default: None,
+                    namespace: None,
+                    specifiers: vec![],
+                    filename,
+                    location: Location { start, end },
+                })
+            },
+            |p| {
+                let default = parse_binding_identifier(p)?;
+
+                parse_whitespace(p)?;
+
+                alt!(p,
+                    |p| {
+                        char(p, ',')?;
+                        parse_whitespace(p)?;
+
+                        error(p,
+                            |p| alt!(p,
+                                // TODO figure out a way to avoid the clone ?
+                                |p| parse_namespace_import(p, start, Some(default.clone())),
+                                |p| parse_named_imports(p, start, Some(default.clone())),
+                            ),
+                            "Expected * or {",
+                        )
+                    },
+                    |p| {
+                        let filename = parse_from_clause(p)?;
+
+                        let end = p.position();
+
+                        Ok(ast::ModuleStatement::Import {
+                            default: Some(default),
+                            namespace: None,
+                            specifiers: vec![],
+                            filename,
+                            location: Location { start, end },
+                        })
+                    },
+                )
+            },
+        ),
+        "Expected * or { or identifier or string",
+    )
+}
+
+
+fn parse_module<'a, P>(p: &mut P) -> ParseResult<ast::Module<'a>, P::Error> where P: Parser<Slice = &'a str> {
     let statements = many0(|| {
         parse_whitespace(p)?;
 
-        alt!(p,
-            |p| {
-                parse_keyword(p, "import")?;
-                parse_whitespace(p)?;
-
-                /*error(
-                    alt!(
-                        |p| {
-                            char('*')(p)?;
-                            parse_whitespace(p)?;
-                            error(|p| parse_keyword(p, "as"), "Expected as")(p)?;
-                            parse_whitespace(p)?;
-                            let ident = parse_binding_identifier(p)?;
-                        },
-                        |p| {
-                            let specifiers = separated_list('{', '}', "", eof)(p)?;
-                        },
-                        |p| {
-                            let ident = parse_identifier(p)?;
-
-
-                        },
-                    ),
-                    "Expected * or { or identifier or string",
-                )(p)?;
-
-                Ok(Some(ast::ModuleStatement::Import {
-                    specifiers,
-                    filename,
-                }))*/
-
-                Ok(None)
-            },
-            |p| {
-                parse_keyword(p, "export")?;
-                Ok(None)
-            },
-            |p| {
-                let statement = parse_statement(p)?;
-                Ok(Some(ast::ModuleStatement::Statement(statement)))
-            },
-            |p| {
-                error(p, eof, "Unexpected token")?;
-                Ok(None)
-            },
+        error(p,
+            |p| alt!(p,
+                |p| {
+                    eof(p)?;
+                    Ok(None)
+                },
+                |p| {
+                    let value = parse_import(p)?;
+                    Ok(Some(value))
+                },
+                |p| {
+                    parse_keyword(p, "export")?;
+                    Ok(None)
+                },
+                |p| {
+                    let statement = parse_statement(p)?;
+                    Ok(Some(ast::ModuleStatement::Statement(statement)))
+                },
+            ),
+            "Unexpected token",
         )
     })?;
 
@@ -645,17 +791,18 @@ pub fn parse_as_module<'a, 'b>(input: &'a str, filename: Option<&'b str>) -> Res
 }
 
 
-/*#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
+    use super::ast::*;
     use std::path::Path;
     use std::fs::{File, read_dir};
     use std::io::{Read, BufReader};
 
-    fn read(s: &str) -> String {
+    fn read(s: &str) -> std::string::String {
         let file = File::open(s).unwrap();
         let mut buf_reader = BufReader::new(file);
-        let mut contents = String::new();
+        let mut contents = std::string::String::new();
         buf_reader.read_to_string(&mut contents).unwrap();
         contents
     }
@@ -669,77 +816,73 @@ mod tests {
 
     #[test]
     fn test_empty() {
-        assert_eq!(Parser::new("", Some("foo.js")).parse_as_module(), Ok(Module {
+        assert_eq!(parse_as_module("", Some("foo.js")), Ok(Module {
             statements: vec![],
         }));
 
-        assert_eq!(Parser::new(" \n \n  \n   ", Some("foo.js")).parse_as_module(), Ok(Module {
+        assert_eq!(parse_as_module(" \n \n  \n   ", Some("foo.js")), Ok(Module {
             statements: vec![],
         }));
     }
 
     #[test]
     fn test_whitespace() {
-        assert_eq!(Parser::new("\n\n\n      \"use strict\"\ntest", Some("foo.js")).parse_as_module(), Ok(Module {
+        assert_eq!(parse_as_module("\n\n\n      \"use strict\"\ntest", Some("foo.js")), Ok(Module {
             statements: vec![
-                Span {
-                    value: ModuleStatement::Statement(Statement::Expression(Span {
-                        value: Expression::Literal(Literal::String(StringLiteral {
-                            raw_value: "\"use strict\""
-                        })),
+                ModuleStatement::Statement(Statement::Expression(Expression::Literal(Literal::String(String {
+                    raw_value: "\"use strict\"",
+                    location: Location {
                         start: Position { offset: 9, line: 3, column: 6 },
                         end: Position { offset: 21, line: 3, column: 18 },
-                    })),
-                    start: Position { offset: 9, line: 3, column: 6 },
-                    end: Position { offset: 22, line: 4, column: 0 },
-                },
-                Span {
-                    value: ModuleStatement::Statement(Statement::Expression(Span {
-                        value: Expression::Identifier(Identifier { name: "test" }),
+                    },
+                })))),
+                ModuleStatement::Statement(Statement::Expression(Expression::Identifier(Identifier {
+                    raw_value: "test",
+                    location: Location {
                         start: Position { offset: 22, line: 4, column: 0 },
                         end: Position { offset: 26, line: 4, column: 4 },
-                    })),
-                    start: Position { offset: 22, line: 4, column: 0 },
-                    end: Position { offset: 26, line: 4, column: 4 },
-                },
+                    },
+                }))),
             ],
         }));
     }
 
     #[test]
     fn test_import() {
-        assert_eq!(Parser::new("\n\n   \n     import \"bar\"", Some("foo.js")).parse_as_module(), Ok(Module {
+        assert_eq!(parse_as_module("\n\n   \n     import \"bar\"", Some("foo.js")), Ok(Module {
             statements: vec![
-                Span {
-                    value: ModuleStatement::Import {
-                        specifiers: vec![],
-                        filename: Span {
-                            value: StringLiteral {
-                                raw_value: "\"bar\"",
-                            },
+                ModuleStatement::Import {
+                    default: None,
+                    namespace: None,
+                    specifiers: vec![],
+                    filename: String {
+                        raw_value: "\"bar\"",
+                        location: Location {
                             start: Position { offset: 18, line: 3, column: 12 },
                             end: Position { offset: 23, line: 3, column: 17 },
-                        }
+                        },
                     },
-                    start: Position { offset: 11, line: 3, column: 5 },
-                    end: Position { offset: 23, line: 3, column: 17, },
+                    location: Location {
+                        start: Position { offset: 11, line: 3, column: 5 },
+                        end: Position { offset: 23, line: 3, column: 17, },
+                    },
                 },
             ],
         }));
 
-        assert_eq!(Parser::new("\n\n   \n      import 1 from \"bar\";\n", Some("foo.js")).parse_as_module(), Ok(Module {
-            statements: vec![],
-        }));
+        assert_eq!(parse_as_module("\n\n   \n      import 1 from \"bar\";\n", Some("foo.js")), Err(
+            "Expected * or { or identifier or string [foo.js 4:14]\n      import 1 from \"bar\";\n~~~~~~~~~~~~~^".to_string(),
+        ));
     }
 
     #[test]
     fn test_official_pass() {
-        each_file("test/test-cases/pass", |file, filename| {
-            let explicit_filename = format!("test/test-cases/pass-explicit/{}", filename.file_name().unwrap().to_str().unwrap());
+        each_file("test262-parser-tests/pass", |file, filename| {
+            let explicit_filename = format!("test262-parser-tests/pass-explicit/{}", filename.file_name().unwrap().to_str().unwrap());
             let explicit = read(&explicit_filename);
 
-            let normal = Parser::new(file, Some(filename.to_str().unwrap())).parse_as_module().unwrap();
-            let explicit = Parser::new(&explicit, Some(&explicit_filename)).parse_as_module().unwrap();
+            let normal = parse_as_module(file, Some(filename.to_str().unwrap())).unwrap();
+            let explicit = parse_as_module(&explicit, Some(&explicit_filename)).unwrap();
 
             assert_eq!(normal, explicit);
         });
@@ -747,16 +890,15 @@ mod tests {
 
     #[test]
     fn test_official_fail() {
-        each_file("test/test-cases/fail", |file, filename| {
-            assert!(Parser::new(file, Some(filename.to_str().unwrap())).parse_as_module().is_err());
+        each_file("test262-parser-tests/fail", |file, filename| {
+            assert!(parse_as_module(file, Some(filename.to_str().unwrap())).is_err());
         });
     }
 
     #[test]
     fn test_official_early() {
-        each_file("test/test-cases/early", |file, filename| {
-            assert!(Parser::new(file, Some(filename.to_str().unwrap())).parse_as_module().is_err());
+        each_file("test262-parser-tests/early", |file, filename| {
+            assert!(parse_as_module(file, Some(filename.to_str().unwrap())).is_err());
         });
     }
 }
-*/

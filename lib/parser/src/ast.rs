@@ -479,44 +479,37 @@ pub enum Statement<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ImportSpecifier<'a> {
-    Single {
-        local: Identifier<'a>,
-        external: Option<Identifier<'a>>,
-    },
-    Default {
-        local: Identifier<'a>,
-    },
-    Namespace {
-        local: Identifier<'a>,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExportSpecifier<'a> {
+pub struct Specifier<'a> {
     pub local: Identifier<'a>,
-    pub external: Identifier<'a>,
+    pub external: Option<Identifier<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModuleStatement<'a> {
     Statement(Statement<'a>),
     Import {
-        specifiers: Vec<ImportSpecifier<'a>>,
+        default: Option<Identifier<'a>>,
+        namespace: Option<Identifier<'a>>,
+        specifiers: Vec<Specifier<'a>>,
         filename: String<'a>,
+        location: Location,
     },
     ExportDeclaration {
         declaration: Declaration<'a>,
+        location: Location,
     },
     ExportDefault {
         expression: Expression<'a>,
+        location: Location,
     },
     ExportModule {
-        specifiers: Vec<ExportSpecifier<'a>>,
+        specifiers: Vec<Specifier<'a>>,
         filename: Option<String<'a>>,
+        location: Location,
     },
     ExportAll {
         filename: String<'a>,
+        location: Location,
     },
 }
 
