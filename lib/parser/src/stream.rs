@@ -1,40 +1,22 @@
-use super::combinators::*;
+use super::combinators::{Position, Parser};
 
 
 pub type ParseError = String;
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Position {
-    pub offset: usize,
-    pub line: u32,
-    pub column: u32,
-}
-
-impl Default for Position {
-    fn default() -> Self {
-        Position {
-            offset: 0,
-            line: 0,
-            column: 0,
-        }
-    }
-}
-
-
 #[derive(Debug, Clone)]
-pub struct State<'a> {
+pub struct TextStreamState<'a> {
     stream: std::str::Chars<'a>,
     column: u32,
     line: u32,
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TextStream<'a, 'b> {
     input: &'a str,
     filename: Option<&'b str>,
-    state: State<'a>,
+    state: TextStreamState<'a>,
 }
 
 impl<'a, 'b> TextStream<'a, 'b> {
@@ -43,7 +25,7 @@ impl<'a, 'b> TextStream<'a, 'b> {
         Self {
             input,
             filename,
-            state: State {
+            state: TextStreamState {
                 stream: input.chars(),
                 column: 0,
                 line: 0,
@@ -51,7 +33,60 @@ impl<'a, 'b> TextStream<'a, 'b> {
         }
     }
 
-    pub fn position(&self) -> Position {
+    #[inline]
+    pub fn slice(&self, start: usize, end: usize) -> &'a str {
+        &self.input[start..end]
+    }
+}
+
+
+impl<'a, 'b> Parser for TextStream<'a, 'b> {
+    type Backtrack = TextStreamState<'a>;
+    type Error = ParseError;
+
+    #[inline]
+    fn create_backtrack(&self) -> TextStreamState<'a> {
+        self.state.clone()
+    }
+
+    #[inline]
+    fn restore_backtrack(&mut self, backtrack: TextStreamState<'a>) {
+        self.state = backtrack;
+    }
+
+    fn next(&mut self) -> Option<char> {
+        // https://www.ecma-international.org/ecma-262/10.0/#sec-line-terminators
+        match self.state.stream.next()? {
+            '\u{000A}' |
+            '\u{2028}' |
+            '\u{2029}' => {
+                self.state.column = 0;
+                self.state.line += 1;
+                Some('\n')
+            },
+            '\u{000D}' => {
+                let clone = self.state.stream.clone();
+
+                match self.state.stream.next() {
+                    // \r\n
+                    Some('\u{000A}') => {},
+                    None => {
+                        self.state.stream = clone;
+                    },
+                }
+
+                self.state.column = 0;
+                self.state.line += 1;
+                Some('\n')
+            },
+            c => {
+                self.state.column += 1;
+                Some(c)
+            },
+        }
+    }
+
+    fn position(&self) -> Position {
         Position {
             // TODO is this faster than just storing the offset directly ?
             offset: self.input.len() - self.state.stream.as_str().len(),
@@ -60,13 +95,8 @@ impl<'a, 'b> TextStream<'a, 'b> {
         }
     }
 
-    #[inline]
-    pub fn slice(&self, start: usize, end: usize) -> &'a str {
-        &self.input[start..end]
-    }
-
     // TODO improve this somehow
-    pub fn error(&self, start: Position, message: &str) -> String {
+    fn error(&self, start: Position, message: &str) -> String {
         let (left, right) = self.input.split_at(start.offset);
 
         let mut left_chars = left.chars();
@@ -102,51 +132,5 @@ impl<'a, 'b> TextStream<'a, 'b> {
             &right[..right_index],
             "~".repeat(start.column as usize),
         )
-    }
-}
-
-impl<'a, 'b> Parser for TextStream<'a, 'b> {
-    type Backtrack = State<'a>;
-
-    #[inline]
-    fn create_backtrack(&self) -> Self::Backtrack {
-        self.state.clone()
-    }
-
-    #[inline]
-    fn restore_backtrack(&mut self, backtrack: Self::Backtrack) {
-        self.state = backtrack;
-    }
-
-    fn next(&mut self) -> Option<char> {
-        // https://www.ecma-international.org/ecma-262/10.0/#sec-line-terminators
-        match self.state.stream.next()? {
-            '\u{000A}' |
-            '\u{2028}' |
-            '\u{2029}' => {
-                self.state.column = 0;
-                self.state.line += 1;
-                Some('\n')
-            },
-            '\u{000D}' => {
-                let clone = self.state.stream.clone();
-
-                match self.state.stream.next() {
-                    // \r\n
-                    Some('\u{000A}') => {},
-                    None => {
-                        self.state.stream = clone;
-                    },
-                }
-
-                self.state.column = 0;
-                self.state.line += 1;
-                Some('\n')
-            },
-            c => {
-                self.state.column += 1;
-                Some(c)
-            },
-        }
     }
 }

@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 #[macro_use]
 mod combinators;
 pub use combinators::*;
@@ -6,16 +8,64 @@ mod stream;
 pub use stream::*;
 
 pub mod ast;
-use ast::{Location, Position};
-
-mod token;
-use token::*;
-
-pub use token::ParseError;
+use ast::Location;
 
 
-fn consume_whitespace(p: &mut TextStream) -> ParseResult<(), ParseError> {
-    unimplemented!();
+const HEX_DIGIT_ERROR: &'static str = "Expected one of [0 1 2 3 4 5 6 7 8 9 a b c d e f A B C D E F]";
+
+
+pub fn hex_to_char(s: &str) -> Option<char> {
+    let decoded = match u32::from_str_radix(s, 16) {
+        Ok(s) => s,
+        // TODO handle things like overflow
+        Err(_) => unreachable!(),
+    };
+
+    decoded.try_into().ok()
+}
+
+
+// https://www.ecma-international.org/ecma-262/10.0/#prod-IdentifierStart
+fn is_identifier_start(c: char) -> bool {
+    match c {
+        '$' => true,
+        '_' => true,
+        '\\' => true,
+        // TODO use ID_Start instead of XID_Start ?
+        c if unicode_xid::UnicodeXID::is_xid_start(c) => true,
+        _ => false,
+    }
+}
+
+// https://www.ecma-international.org/ecma-262/10.0/#prod-IdentifierPart
+fn is_identifier_part(c: char) -> bool {
+    // '\' is excluded because it's handled in parse_identifier
+    match c {
+        '$' => true,
+        '\u{200C}' => true,
+        '\u{200D}' => true,
+        // TODO use ID_Continue instead of XID_Continue ?
+        c if unicode_xid::UnicodeXID::is_xid_continue(c) => true,
+        _ => false,
+    }
+}
+
+// https://www.ecma-international.org/ecma-262/10.0/#sec-white-space
+fn is_whitespace(c: char) -> bool {
+    match c {
+        '\u{0009}' |
+        '\u{000B}' |
+        '\u{000C}' |
+        '\u{0020}' |
+        '\u{00A0}' |
+        '\u{FEFF}' |
+        '\u{1680}' |
+        '\u{2000}'..='\u{200A}' |
+        '\u{202F}' |
+        '\u{205F}' |
+        '\u{3000}' => true,
+        _ => false,
+    }
 }
 
 
@@ -27,249 +77,570 @@ fn consume_whitespace(p: &mut TextStream) -> ParseResult<(), ParseError> {
 //  Bad:  {,}
 //  Bad:  {foo bar}
 //  Bad:  {foo,,}
-pub fn separated_list<'a, A, F>(left: char, right: char, message: &'a str, mut f: F) -> impl FnMut(&mut TextStream) -> ParseResult<Vec<A>, ParseError> + 'a
-    where F: FnMut(&mut TextStream) -> ParseResult<A, ParseError> + 'a {
-    move |p| {
-        let start = p.position();
+fn separated_list<A, F>(p: &mut TextStream, left: char, right: char, message: &str, mut f: F) -> ParseResult<Vec<A>, ParseError>
+    where F: FnMut(&mut TextStream) -> ParseResult<A, ParseError> {
+    let start = p.position();
 
-        char(left)(p)?;
+    char(p, left)?;
 
-        let mut seen = false;
+    let mut seen = false;
 
-        many0(|p| {
-            consume_whitespace(p)?;
+    many0(|| {
+        parse_whitespace(p)?;
 
-            // TODO new alt combinator for this ?
-            alt!(
+        // TODO new alt combinator for this ?
+        alt!(p,
+            |p| {
+                char(p, right)?;
+                Ok(None)
+            },
+            |p| {
+                if seen {
+                    on_fail(p,
+                        |p| {
+                            char(p, ',')?;
+                            parse_whitespace(p)
+                        },
+                        |p| p.error(start, "Expected ,"),
+                    )?;
+                }
+
+                on_fail(p,
+                    |p| alt!(p,
+                        |p| {
+                            if seen {
+                                char(p, right)?;
+                                Ok(None)
+
+                            } else {
+                                Err(None)
+                            }
+                        },
+                        |p| {
+                            let value = f(p)?;
+                            seen = true;
+                            Ok(Some(value))
+                        },
+                    ),
+                    |p| p.error(start, &format!("Expected {} or {}", message, right)),
+                )
+            },
+        )
+    })
+}
+
+
+fn is_number_or_identifier(p: &mut TextStream) -> ParseResult<bool, ParseError> {
+    if let Some(_) = peek(p, |p| char_if(p, |c| c.is_ascii_digit() || is_identifier_start(c)))? {
+        Ok(true)
+
+    } else {
+        Ok(false)
+    }
+}
+
+
+fn parse_hex_digit(p: &mut TextStream) -> ParseResult<(), ParseError> {
+    error(p, |p| void(|| char_if(p, |c| c.is_ascii_hexdigit())), HEX_DIGIT_ERROR)
+}
+
+
+fn parse_unicode_code_point(p: &mut TextStream, start: Position, end: Position) -> ParseResult<char, ParseError> {
+    match hex_to_char(p.slice(start.offset, end.offset)) {
+        Some(c) => Ok(c),
+        None => Err(Some(p.error(start, "Invalid Unicode code point"))),
+    }
+}
+
+// https://www.ecma-international.org/ecma-262/10.0/#prod-UnicodeEscapeSequence
+fn parse_unicode_escape_sequence(p: &mut TextStream) -> ParseResult<char, ParseError> {
+    alt!(p,
+        |p| {
+            char(p, '{')?;
+
+            let start = p.position();
+
+            on_fail(p,
+                |p| each1(|| alt_opt!(p,
+                    |p| void(|| char_if(p, |c| c.is_ascii_hexdigit())),
+                )),
+                // TODO test the position
+                |p| p.error(start, HEX_DIGIT_ERROR),
+            )?;
+
+            let end = p.position();
+
+            on_fail(p,
+                |p| char(p, '}'),
+                |p| p.error(end, "Expected }"),
+            )?;
+
+            // TODO check the MV ?
+            parse_unicode_code_point(p, start, end)
+        },
+        |p| {
+            let start = p.position();
+
+            parse_hex_digit(p)?;
+            parse_hex_digit(p)?;
+            parse_hex_digit(p)?;
+            parse_hex_digit(p)?;
+
+            let end = p.position();
+
+            parse_unicode_code_point(p, start, end)
+        },
+    )
+}
+
+
+fn parse_escape(p: &mut TextStream, start: Position) -> ParseResult<(), ParseError> {
+    on_fail(p,
+        |p| alt!(p,
+            |p| {
+                char(p, 'u')?;
+                void(|| parse_unicode_escape_sequence(p))
+            },
+            // TODO validation for this ?
+            |p| {
+                char(p, 'x')?;
+                parse_hex_digit(p)?;
+                parse_hex_digit(p)
+            },
+            |p| {
+                char(p, '0')?;
+
+                if let Some(_) = peek(p, |p| char_if(p, |c| c.is_ascii_digit()))? {
+                    return Err(Some(p.error(start, "\\0 cannot be followed by a number")));
+                }
+
+                Ok(())
+            },
+            // TODO allow for 8 and 9 ?
+            |p| {
+                char_if(p, |c| c.is_ascii_digit())?;
+                Err(Some(p.error(start, "\\ cannot be followed by a number")))
+            },
+            any_char,
+        ),
+        |p| p.error(start, "Missing escape sequence")
+    )
+}
+
+
+fn parse_string_delimiter<'a, 'b>(p: &mut TextStream<'a, 'b>, delimiter: char) -> ParseResult<ast::String<'a>, ParseError> {
+    let start = p.position();
+
+    char(p, delimiter)?;
+
+    on_fail(p,
+        |p| each0(|| alt!(p,
+            |p| {
+                char(p, delimiter)?;
+                Ok(None)
+            },
+            |p| {
+                let start = p.position();
+                char(p, '\\')?;
+                parse_escape(p, start)?;
+                Ok(Some(()))
+            },
+            |p| {
+                let start = p.position();
+                // TODO allow for '\u{2028}' and '\u{2029}'
+                char(p, '\n')?;
+                Err(Some(p.error(start, "Strings may not contain newlines except after \\")))
+            },
+            |p| {
+                any_char(p)?;
+                Ok(Some(()))
+            },
+        )),
+        |p| p.error(start, &format!("Missing ending {}", delimiter))
+    )?;
+
+    let end = p.position();
+
+    Ok(ast::String {
+        raw_value: p.slice(start.offset, end.offset),
+        location: Location { start, end }
+    })
+}
+
+fn parse_string<'a, 'b>(p: &mut TextStream<'a, 'b>) -> ParseResult<ast::String<'a>, ParseError> {
+    alt!(p,
+        |p| parse_string_delimiter(p, '"'),
+        |p| parse_string_delimiter(p, '\''),
+    )
+}
+
+
+fn parse_line_comment(p: &mut TextStream) -> ParseResult<(), ParseError> {
+    char(p, '/')?;
+    char(p, '/')?;
+    each0(|| alt_opt!(p,
+        |p| void(|| char_if(p, |c| c != '\n')),
+    ))
+}
+
+fn parse_block_comment(p: &mut TextStream) -> ParseResult<(), ParseError> {
+    let start = p.position();
+
+    char(p, '/')?;
+    char(p, '*')?;
+
+    on_fail(p,
+        |p| each0(|| alt!(p,
+            |p| {
+                char(p, '*')?;
+                char(p, '/')?;
+                Ok(None)
+            },
+            |p| {
+                any_char(p)?;
+                Ok(Some(()))
+            },
+        )),
+        |p| p.error(start, "Missing ending */"),
+    )
+}
+
+fn parse_whitespace(p: &mut TextStream) -> ParseResult<(), ParseError> {
+    each0(|| alt_opt!(p,
+        |p| char(p, '\n'),
+        |p| void(|| char_if(p, is_whitespace)),
+        parse_line_comment,
+        parse_block_comment,
+    ))
+}
+
+
+fn parse_regexp<'a>(p: &mut TextStream<'a, '_>) -> ParseResult<ast::RegExp<'a>, ParseError> {
+    let start = p.position();
+
+    char(p, '/')?;
+
+    on_fail(p,
+        |p| each0(|| alt!(p,
+            |p| {
+                char(p, '/')?;
+                Ok(None)
+            },
+            |p| {
+                let start = p.position();
+
+                char(p, '\\')?;
+
+                on_fail(p,
+                    |p| alt!(p,
+                        |p| {
+                            let start = p.position();
+                            char(p, '\n')?;
+                            return Err(Some(p.error(start, "RegExps may not contain newlines")));
+                        },
+                        any_char,
+                    ),
+                    |p| p.error(start, "Missing escape sequence"),
+                )?;
+
+                Ok(Some(()))
+            },
+            // TODO code duplication
+            |p| {
+                let start = p.position();
+                char(p, '\n')?;
+                return Err(Some(p.error(start, "RegExps may not contain newlines")));
+            },
+            |p| {
+                any_char(p)?;
+                Ok(Some(()))
+            },
+        )),
+        |p| p.error(start, "Missing ending /"),
+    )?;
+
+    let pattern_end = p.position();
+
+    let raw_pattern = p.slice(start.offset, pattern_end.offset);
+
+    each0(|| alt_opt!(p,
+        |p| void(|| char_if(p, |c| c.is_ascii_lowercase())),
+    ))?;
+
+    let end = p.position();
+
+    if is_number_or_identifier(p)? {
+        return Err(Some(p.error(end, "RegExp cannot be followed by a number or identifier")));
+    }
+
+    let raw_flags = p.slice(pattern_end.offset, end.offset);
+
+    Ok(ast::RegExp {
+        raw_pattern,
+        raw_flags,
+        location: Location { start, end },
+    })
+}
+
+
+fn parse_template<'a>(p: &mut TextStream<'a, '_>, tag: Option<Box<ast::Expression<'a>>>) -> ParseResult<ast::Template<'a>, ParseError> {
+    let start = p.position();
+
+    char(p, '`')?;
+
+    let mut parts = vec![];
+    let mut part_start = p.position();
+
+    on_fail(p,
+        |p| each0(|| {
+            let end = p.position();
+
+            alt!(p,
                 |p| {
-                    char(right)(p)?;
+                    char(p, '`')?;
+
+                    parts.push(ast::TemplatePart::TemplateRaw(ast::TemplateRaw {
+                        raw_value: p.slice(part_start.offset, end.offset),
+                        location: Location { start: part_start, end },
+                    }));
+
                     Ok(None)
                 },
                 |p| {
-                    if seen {
-                        on_fail(
-                            |p| {
-                                char(',')(p)?;
-                                consume_whitespace(p)
-                            },
-                            |p| p.error(start, "Expected ,"),
-                        )(p)?;
-                    }
+                    char(p, '\\')?;
 
-                    on_fail(
-                        alt!(
-                            |p| {
-                                if seen {
-                                    char(right)(p)?;
-                                    Ok(None)
+                    on_fail(p,
+                        any_char,
+                        |p| p.error(end, "Missing escape sequence"),
+                    )?;
 
-                                } else {
-                                    Err(None)
-                                }
-                            },
-                            |p| {
-                                let value = f(p)?;
-                                seen = true;
-                                Ok(Some(value))
-                            },
-                        ),
-                        |p| p.error(start, &format!("Expected {} or {}", message, right)),
-                    )(p)
+                    Ok(Some(()))
                 },
-            )(p)
-        })(p)
+                |p| {
+                    char(p, '$')?;
+
+                    alt!(p,
+                        |p| {
+                            char(p, '{')?;
+
+                            parts.push(ast::TemplatePart::TemplateRaw(ast::TemplateRaw {
+                                raw_value: p.slice(part_start.offset, end.offset),
+                                location: Location { start: part_start, end },
+                            }));
+
+                            parse_whitespace(p)?;
+
+                            let expr = parse_expression(p)?;
+
+                            parse_whitespace(p)?;
+
+                            error(p, |p| char(p, '}'), "Expected }")?;
+
+                            part_start = p.position();
+
+                            parts.push(ast::TemplatePart::Expression(expr));
+
+                            Ok(Some(()))
+                        },
+                        |p| {
+                            // TODO is this correct ?
+                            Ok(Some(()))
+                        },
+                    )
+                },
+                |p| {
+                    any_char(p)?;
+                    Ok(Some(()))
+                },
+            )
+        }),
+        |p| p.error(start, "Missing ending `"),
+    )?;
+
+    let end = p.position();
+
+    Ok(ast::Template {
+        tag,
+        parts,
+        location: Location { start, end },
+    })
+}
+
+
+fn parse_identifier_unicode<F>(p: &mut TextStream, start: Position, f: F) -> ParseResult<(), ParseError> where F: FnOnce(char) -> bool {
+    error(p, |p| char(p, 'u'), "Expected u")?;
+
+    if f(parse_unicode_escape_sequence(p)?) {
+        Ok(())
+
+    } else {
+        Err(Some(p.error(start, "Invalid Unicode code point for identifier")))
+    }
+}
+
+// https://www.ecma-international.org/ecma-262/10.0/#prod-IdentifierName
+fn parse_identifier<'a>(p: &mut TextStream<'a, '_>) -> ParseResult<ast::Identifier<'a>, ParseError> {
+    let start = p.position();
+
+    let c = char_if(p, is_identifier_start)?;
+
+    if c == '\\' {
+        parse_identifier_unicode(p, start, is_identifier_start)?;
+    }
+
+    each0(|| alt_opt!(p,
+        |p| {
+            char_if(p, is_identifier_part)?;
+            Ok(())
+        },
+        |p| {
+            let start = p.position();
+            char(p, '\\')?;
+            parse_identifier_unicode(p, start, is_identifier_part)?;
+            Ok(())
+        },
+    ))?;
+
+    let end = p.position();
+
+    Ok(ast::Identifier {
+        raw_value: p.slice(start.offset, end.offset),
+        location: Location { start, end },
+    })
+}
+
+fn parse_binding_identifier<'a>(p: &mut TextStream<'a, '_>) -> ParseResult<ast::Identifier<'a>, ParseError> {
+    let ident = parse_identifier(p)?;
+
+    if ident.is_reserved_word() {
+        Err(Some(p.error(ident.location.start, "Cannot use reserved word as variable")))
+
+    } else {
+        Ok(ident)
+    }
+}
+
+
+fn parse_keyword(p: &mut TextStream, name: &str) -> ParseResult<(), ParseError> {
+    eq(p, name)?;
+
+    // TODO is this correct ?
+    if let Some(_) = peek(p, |p| char_if(p, |c| c == '\\' || is_identifier_part(c)))? {
+        Err(None)
+
+    } else {
+        Ok(())
     }
 }
 
 
 
-pub struct Parser<'a, 'b> {
-    input: &'a str,
-    filename: Option<&'b str>,
-    stream: TokenStream<'a, 'b>,
-    //peeked: Option<Option<Result<Token<'a>, ParseError>>>,
-    is_expression: bool,
-    is_template: bool,
+fn parse_decimal_digits0(p: &mut TextStream) -> ParseResult<(), ParseError> {
+    each0(|| alt_opt!(p,
+        |p| void(|| char_if(p, |c| c.is_ascii_digit())),
+    ))
 }
 
-impl<'a, 'b> Parser<'a, 'b> {
-    pub fn new(input: &'a str, filename: Option<&'b str>) -> Self {
-        Self {
-            input,
-            filename,
-            stream: TokenStream::new(input, filename),
-            //peeked: None,
-            is_expression: true,
-            is_template: false,
-        }
+fn parse_decimal_digits1(p: &mut TextStream) -> ParseResult<(), ParseError> {
+    error(p,
+        |p| each1(|| alt_opt!(p,
+            |p| void(|| char_if(p, |c| c.is_ascii_digit())),
+        )),
+        "Expected one of [0 1 2 3 4 5 6 7 8 9]",
+    )
+}
+
+fn parse_decimal_number(p: &mut TextStream) -> ParseResult<(), ParseError> {
+    optional(p, |p| {
+        char(p, '.')?;
+        parse_decimal_digits0(p)
+    })?;
+
+    optional(p, parse_exponent_part)?;
+
+    Ok(())
+}
+
+fn parse_exponent_part(p: &mut TextStream) -> ParseResult<(), ParseError> {
+    char_if(p, |c| c == 'e' || c == 'E')?;
+    optional(p, |p| char_if(p, |c| c == '+' || c == '-'))?;
+    parse_decimal_digits1(p)
+}
+
+fn parse_after_number(p: &mut TextStream) -> ParseResult<(), ParseError> {
+    let start = p.position();
+
+    if is_number_or_identifier(p)? {
+        return Err(Some(p.error(start, "Number cannot be followed by a number or identifier")));
     }
 
-    fn error<A>(&self, start: Position, message: &str) -> Result<A, ParseError> {
-        Err(format_error(self.input, self.filename, start, message))
-    }
-
-    fn next(&mut self, is_expression: bool, is_template: bool) -> Result<Option<Token<'a>>, ParseError> {
-        self.stream.next(is_expression, is_template)
-
-        /*match self.peeked.take() {
-            Some(v) => v,
-            None => self.stream.next(is_expression, is_template),
-        }*/
-    }
-
-    /*fn peek(&mut self, is_expression: bool, is_template: bool) -> &Result<Option<Token<'a>>, ParseError> {
-        let stream = &mut self.stream;
-        self.peeked.get_or_insert_with(|| stream.next(is_expression, is_template)).as_ref()
-    }*/
+    Ok(())
+}
 
 
-    fn statement_list_item(&mut self, ident: ast::Identifier<'a>, can_yield: bool, can_await: bool, can_return: bool) -> Result<ast::Statement<'a>, ParseError> {
-        unimplemented!();
-    }
+fn parse_module<'a>(p: &mut TextStream<'a, '_>) -> ParseResult<ast::Module<'a>, ParseError> {
+    let statements = many0(|| {
+        parse_whitespace(p)?;
 
-    fn expression(&mut self) -> Result<ast::Expression<'a>, ParseError> {
-        unimplemented!();
-    }
+        alt!(p,
+            |p| {
+                parse_keyword(p, "import")?;
+                parse_whitespace(p)?;
+
+                /*error(
+                    alt!(
+                        |p| {
+                            char('*')(p)?;
+                            parse_whitespace(p)?;
+                            error(|p| parse_keyword(p, "as"), "Expected as")(p)?;
+                            parse_whitespace(p)?;
+                            let ident = parse_binding_identifier(p)?;
+                        },
+                        |p| {
+                            let specifiers = separated_list('{', '}', "", eof)(p)?;
+                        },
+                        |p| {
+                            let ident = parse_identifier(p)?;
 
 
-    fn template(&mut self, tag: Option<Box<ast::Expression<'a>>>, kind: TemplateKind, raw: ast::TemplateRaw<'a>) -> Result<ast::Template<'a>, ParseError> {
-        let start = raw.location.start;
-        let mut end = raw.location.end;
+                        },
+                    ),
+                    "Expected * or { or identifier or string",
+                )(p)?;
 
-        let mut parts = vec![ast::TemplatePart::TemplateRaw(raw)];
+                Ok(Some(ast::ModuleStatement::Import {
+                    specifiers,
+                    filename,
+                }))*/
 
-        match kind {
-            TemplateKind::Whole => {},
-            TemplateKind::Start => {
-                'top: loop {
-                    parts.push(ast::TemplatePart::Expression(self.expression()?));
-
-                    loop {
-                        match self.next(false, true)? {
-                            None => self.error(start, "Missing ending `")?,
-
-                            Some(Token::Newline) => {
-                                continue;
-                            },
-
-                            Some(Token::Template { kind, raw }) => {
-                                parts.push(ast::TemplatePart::TemplateRaw(raw));
-
-                                match kind {
-                                    TemplateKind::Middle => {
-                                        break;
-                                    },
-                                    TemplateKind::End => {
-                                        end = raw.location.end;
-                                        break 'top;
-                                    },
-                                    _ => unreachable!(),
-                                }
-                            },
-
-                            _ => unreachable!(),
-                        }
-                    }
-                }
+                Ok(None)
             },
-            _ => unreachable!(),
-        }
+            |p| {
+                parse_keyword(p, "export")?;
+                Ok(None)
+            },
+            |p| {
+                let statement = parse_statement(p)?;
+                Ok(Some(ast::ModuleStatement::Statement(statement)))
+            },
+            |p| {
+                error(p, eof, "Unexpected token")?;
+                Ok(None)
+            },
+        )
+    })?;
 
-        Ok(ast::Template {
-            tag,
-            parts,
-            location: Location { start, end },
-        })
-    }
+    Ok(ast::Module { statements })
+}
 
 
-    pub fn parse_as_module(&mut self) -> Result<ast::Module<'a>, ParseError> {
-        let mut statements = vec![];
+pub fn parse_as_module<'a, 'b>(input: &'a str, filename: Option<&'b str>) -> Result<ast::Module<'a>, ParseError> {
+    let mut p = TextStream::new(input, filename);
 
-        loop {
-            match self.next(true, false)? {
-                None => {
-                    return Ok(ast::Module { statements });
-                },
-                Some(Token::Newline) => {
-                    continue;
-                },
-                Some(Token::Literal(lit)) => {
-                    statements.push(ast::ModuleStatement::Statement(
-                        ast::Statement::Expression(
-                            ast::Expression::Literal(lit)
-                        )
-                    ));
-                },
-                Some(Token::Template { kind, raw }) => {
-                    statements.push(ast::ModuleStatement::Statement(
-                        ast::Statement::Expression(
-                            ast::Expression::Literal(
-                                ast::Literal::Template(self.template(None, kind, raw)?)
-                            )
-                        )
-                    ));
-                },
-                Some(Token::Punctuation { value, location }) => {
-                },
-                Some(Token::Identifier(ident)) => {
-                    statements.push(match ident.raw_value {
-                        "import" => {
-                            match self.next(true, false)? {
-                                Some(Token::Punctuation { value: "*", .. }) => {
-
-                                },
-                                Some(Token::Punctuation { value: "{", .. }) => {
-
-                                },
-                                Some(Token::Identifier(ident)) => {
-                                    let mut specifiers = vec![];
-
-                                    match self.next(false, false)? {
-                                        Some(Token::Punctuation { value: ",", .. }) => {
-                                            match self.next(true, false)? {
-                                                Some(Token::Punctuation { value: "*", .. }) => {
-                                                },
-                                                Some(Token::Punctuation { value: "{", .. }) => {
-                                                },
-                                                Some(token)
-                                                _ => {
-                                                    self.error()
-                                                },
-                                            }
-                                        },
-                                        Some(Token::Punctuation { value: ";", .. }) |
-                                        Some(Token::Newline) |
-                                        None => {},
-                                        Some(token) => {
-                                            self.error(token.location.start, "Unexpected token")?
-                                        },
-                                    }
-
-                                    ast::ModuleStatement::Import {
-                                        specifiers,
-                                        filename: string,
-                                    }
-                                },
-                                Some(Token::Literal(ast::Literal::String(string))) => {
-                                    ast::ModuleStatement::Import {
-                                        specifiers: vec![],
-                                        filename: string,
-                                    }
-                                },
-                                _ => {
-                                    self.error(ident.location.end, "Expected * or { or identifier or string")?
-                                },
-                            }
-                        },
-                        "export" => {
-
-                        },
-                        _ => ast::ModuleStatement::Statement(self.statement_list_item(ident, false, false, false)?),
-                    });
-                },
-            }
-        }
+    match parse_module(&mut p) {
+        Ok(s) => Ok(s),
+        Err(Some(e)) => Err(e),
+        Err(None) => unreachable!(),
     }
 }
 
